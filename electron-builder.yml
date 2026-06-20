@@ -1,0 +1,15 @@
+appId: ai.augustalabs.claudecode-stremio
+productName: ClaudeCode Stremio
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+mac:
+  category: public.app-category.entertainment
+  target:
+    - dmg
+    - zip
+  # Enable hardened runtime; signing/notarization are configured at release time.
+  hardenedRuntime: true
