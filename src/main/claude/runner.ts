@@ -2,20 +2,31 @@
  * Drives Claude Code runs via the Agent SDK and streams their progress out as
  * RunEvents. Because the SDK reads/writes the same session store as the CLI,
  * a run started here is visible from the terminal and vice-versa.
+ *
+ * Runs are interactive: tool permissions and AskUserQuestion prompts are
+ * surfaced to the renderer via `needsInput` events and resolved when the user
+ * replies through `resolveInput`.
  */
 
 import { randomUUID } from 'node:crypto'
-import { query, type Options, type PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import type { RunEvent, StartRunOptions } from '../../shared/types.js'
-import { contentToParts } from './transcript.js'
+import {
+  query,
+  type CanUseTool,
+  type Options,
+  type PermissionMode,
+  type PermissionResult
+} from '@anthropic-ai/claude-agent-sdk'
+import type { InputResponse, RunEvent, StartRunOptions } from '../../shared/types.js'
+import { contentToParts, toolDetail } from './transcript.js'
+import { parseQuestions, withAnswers } from './interaction.js'
 
 /**
- * Background runs are autonomous — the user is off watching Stremio — so we
- * cannot pause to ask for tool permissions. `bypassPermissions` keeps the run
- * moving without prompts. This is a deliberate trade-off for the "fire and
- * walk away" workflow; it is surfaced in the UI so the user understands it.
+ * Default mode surfaces tool permissions through `canUseTool` (bypass mode
+ * would skip it, hiding both approvals and AskUserQuestion prompts). Read-only
+ * tools are pre-approved to keep the prompting to meaningful actions.
  */
-const DEFAULT_PERMISSION_MODE: PermissionMode = 'bypassPermissions'
+const DEFAULT_PERMISSION_MODE: PermissionMode = 'default'
+const AUTO_ALLOWED_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'TodoWrite']
 
 type Emit = (event: RunEvent) => void
 
@@ -23,14 +34,18 @@ interface ActiveRun {
   abort: AbortController
 }
 
+interface PendingInput {
+  resolve: (response: InputResponse) => void
+}
+
 const activeRuns = new Map<string, ActiveRun>()
+const pendingInputs = new Map<string, PendingInput>()
 
 /** Start a run and stream events through `emit`. Returns the new run id. */
 export function startRun(options: StartRunOptions, emit: Emit): string {
   const runId = randomUUID()
   const abort = new AbortController()
   activeRuns.set(runId, { abort })
-  // Fire-and-forget; all outcomes are reported through `emit`.
   void drive(runId, options, emit, abort)
   return runId
 }
@@ -40,9 +55,67 @@ export function cancelRun(runId: string): void {
   activeRuns.get(runId)?.abort.abort()
 }
 
+/** Resolve a pending input request with the user's reply. */
+export function resolveInput(requestId: string, response: InputResponse): void {
+  const pending = pendingInputs.get(requestId)
+  if (pending) {
+    pendingInputs.delete(requestId)
+    pending.resolve(response)
+  }
+}
+
 /** Number of runs currently in flight (used for shutdown handling/tests). */
 export function activeRunCount(): number {
   return activeRuns.size
+}
+
+/** Await the user's reply to a surfaced input request. */
+function awaitInput(requestId: string, abort: AbortController): Promise<InputResponse> {
+  return new Promise<InputResponse>((resolve, reject) => {
+    pendingInputs.set(requestId, { resolve })
+    // If the run is cancelled while waiting, abandon the request.
+    abort.signal.addEventListener(
+      'abort',
+      () => {
+        if (pendingInputs.delete(requestId)) reject(new Error('aborted'))
+      },
+      { once: true }
+    )
+  })
+}
+
+/** Build the canUseTool callback that surfaces questions/permissions to the UI. */
+function makeCanUseTool(runId: string, emit: Emit, abort: AbortController): CanUseTool {
+  return async (toolName, input, { suggestions }): Promise<PermissionResult> => {
+    const requestId = randomUUID()
+
+    if (toolName === 'AskUserQuestion') {
+      const questions = parseQuestions(input)
+      if (questions.length === 0) return { behavior: 'allow', updatedInput: input }
+      emit({ type: 'needsInput', runId, request: { kind: 'question', requestId, questions } })
+      const response = await awaitInput(requestId, abort)
+      if (response.kind === 'question') {
+        return { behavior: 'allow', updatedInput: withAnswers(input, response.answers) }
+      }
+      return { behavior: 'deny', message: 'User dismissed the question.' }
+    }
+
+    // Generic tool approval.
+    emit({
+      type: 'needsInput',
+      runId,
+      request: { kind: 'permission', requestId, toolName, detail: toolDetail(input) }
+    })
+    const response = await awaitInput(requestId, abort)
+    if (response.kind !== 'permission' || response.decision === 'deny') {
+      return { behavior: 'deny', message: 'User denied this action.' }
+    }
+    return {
+      behavior: 'allow',
+      updatedInput: input,
+      updatedPermissions: response.decision === 'allow-always' ? suggestions : undefined
+    }
+  }
 }
 
 async function drive(
@@ -52,12 +125,13 @@ async function drive(
   abort: AbortController
 ): Promise<void> {
   let sessionId: string | null = options.resumeSessionId ?? null
-  let sawError = false
 
   const queryOptions: Options = {
     cwd: options.cwd,
     includePartialMessages: true,
     permissionMode: DEFAULT_PERMISSION_MODE,
+    allowedTools: AUTO_ALLOWED_TOOLS,
+    canUseTool: makeCanUseTool(runId, emit, abort),
     abortController: abort
   }
   if (options.resumeSessionId) queryOptions.resume = options.resumeSessionId
@@ -66,8 +140,6 @@ async function drive(
     const response = query({ prompt: options.prompt, options: queryOptions })
 
     for await (const msg of response) {
-      // Every SDK message carries the canonical session id; capture it so a
-      // freshly created session can be surfaced and resumed later.
       if ('session_id' in msg && typeof msg.session_id === 'string' && msg.session_id) {
         sessionId = msg.session_id
       }
@@ -76,6 +148,9 @@ async function drive(
         case 'system':
           if (msg.subtype === 'init') {
             emit({ type: 'started', runId, sessionId })
+            if (Array.isArray(msg.slash_commands)) {
+              emit({ type: 'slashCommands', runId, commands: msg.slash_commands })
+            }
           }
           break
 
@@ -104,7 +179,6 @@ async function drive(
         }
 
         case 'result': {
-          if (msg.is_error) sawError = true
           emit({ type: 'completed', runId, sessionId, ok: !msg.is_error })
           break
         }
@@ -115,16 +189,13 @@ async function drive(
     }
   } catch (err) {
     if (abort.signal.aborted) {
-      // User-initiated cancellation: report a clean (not-ok) completion.
       emit({ type: 'completed', runId, sessionId, ok: false })
     } else {
-      sawError = true
       emit({ type: 'error', runId, message: errorMessage(err) })
       emit({ type: 'completed', runId, sessionId, ok: false })
     }
   } finally {
     activeRuns.delete(runId)
-    void sawError // tracked for potential future telemetry
   }
 }
 

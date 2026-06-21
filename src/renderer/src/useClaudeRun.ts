@@ -1,45 +1,45 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RunEvent, TranscriptMessage } from '../../shared/types'
+import type { InputRequest, InputResponse, RunEvent, TranscriptMessage } from '../../shared/types'
 
-export type RunStatus = 'idle' | 'running' | 'done' | 'error'
+export type RunStatus = 'idle' | 'running' | 'awaiting-input' | 'done' | 'error'
 
 export interface UseClaudeRun {
   status: RunStatus
-  /** Loaded transcript plus any messages produced during this app session. */
   messages: TranscriptMessage[]
-  /** Live assistant text accumulating from stream deltas, if any. */
   streamingText: string
-  /** The session id currently in focus (loaded or freshly created). */
   sessionId: string | null
   error: string | null
-  /** Replace the transcript (e.g. after loading a historical session). */
+  /** Slash commands available in the current session (from the init event). */
+  commands: string[]
+  /** A pending question/permission Claude is waiting on, if any. */
+  pendingRequest: InputRequest | null
   setMessages: (messages: TranscriptMessage[], sessionId: string | null) => void
-  /** Start a run in the given cwd; resumes `sessionId` when one is set. */
   start: (prompt: string, cwd: string) => Promise<void>
-  /** Cancel the in-flight run, if any. */
   cancel: () => void
+  /** Reply to the pending input request. */
+  respond: (response: InputResponse) => void
 }
 
 /**
- * Manages a single logical Claude Code conversation: its transcript, the
- * streaming run, and lifecycle. `onComplete` fires once per run when it
- * finishes (success, error, or cancel) — the app uses this to pause Stremio
- * and surface the cockpit.
+ * Manages a single logical Claude Code conversation: transcript, streaming run,
+ * interactive prompts, and lifecycle. `onAttention` fires whenever Claude needs
+ * the user — either it finished or it is asking a question / requesting
+ * permission — so the app can pause Stremio and surface the cockpit.
  */
-export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
+export function useClaudeRun(onAttention: () => void): UseClaudeRun {
   const [status, setStatus] = useState<RunStatus>('idle')
   const [messages, setMessagesState] = useState<TranscriptMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [commands, setCommands] = useState<string[]>([])
+  const [pendingRequest, setPendingRequest] = useState<InputRequest | null>(null)
 
-  // Track the active run id so we ignore stray events from prior runs.
   const activeRunId = useRef<string | null>(null)
-  // Keep the latest onComplete without resubscribing on every render.
-  const onCompleteRef = useRef(onComplete)
+  const onAttentionRef = useRef(onAttention)
   useEffect(() => {
-    onCompleteRef.current = onComplete
-  }, [onComplete])
+    onAttentionRef.current = onAttention
+  }, [onAttention])
 
   useEffect(() => {
     const unsubscribe = window.claude.onRunEvent((event: RunEvent) => {
@@ -50,14 +50,23 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
           if (event.sessionId) setSessionId(event.sessionId)
           break
 
+        case 'slashCommands':
+          setCommands(event.commands)
+          break
+
         case 'delta':
           setStreamingText((prev) => prev + event.text)
           break
 
         case 'message':
-          // A finalized assistant message supersedes the streaming buffer.
           setStreamingText('')
           setMessagesState((prev) => [...prev, event.message])
+          break
+
+        case 'needsInput':
+          setPendingRequest(event.request)
+          setStatus('awaiting-input')
+          onAttentionRef.current()
           break
 
         case 'error':
@@ -66,7 +75,6 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
 
         case 'completed': {
           if (event.sessionId) setSessionId(event.sessionId)
-          // Flush any trailing streamed text that never arrived as a message.
           setStreamingText((trailing) => {
             if (trailing.trim()) {
               setMessagesState((prev) => [
@@ -82,8 +90,9 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
             return ''
           })
           setStatus(event.ok ? 'done' : 'error')
+          setPendingRequest(null)
           activeRunId.current = null
-          onCompleteRef.current(event.ok)
+          onAttentionRef.current()
           break
         }
       }
@@ -91,23 +100,20 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
     return unsubscribe
   }, [])
 
-  const setMessages = useCallback(
-    (next: TranscriptMessage[], nextSessionId: string | null) => {
-      setMessagesState(next)
-      setSessionId(nextSessionId)
-      setStreamingText('')
-      setError(null)
-      setStatus('idle')
-    },
-    []
-  )
+  const setMessages = useCallback((next: TranscriptMessage[], nextSessionId: string | null) => {
+    setMessagesState(next)
+    setSessionId(nextSessionId)
+    setStreamingText('')
+    setError(null)
+    setStatus('idle')
+    setPendingRequest(null)
+  }, [])
 
   const start = useCallback(
     async (prompt: string, cwd: string) => {
       const trimmed = prompt.trim()
       if (!trimmed || activeRunId.current) return
 
-      // Optimistically show the user's prompt immediately.
       const userMessage: TranscriptMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -133,14 +139,27 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
     if (activeRunId.current) window.claude.cancelRun(activeRunId.current)
   }, [])
 
+  const respond = useCallback(
+    (response: InputResponse) => {
+      if (!pendingRequest) return
+      void window.claude.respondInput(pendingRequest.requestId, response)
+      setPendingRequest(null)
+      setStatus('running')
+    },
+    [pendingRequest]
+  )
+
   return {
     status,
     messages,
     streamingText,
     sessionId,
     error,
+    commands,
+    pendingRequest,
     setMessages,
     start,
-    cancel
+    cancel,
+    respond
   }
 }

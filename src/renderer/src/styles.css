@@ -81,6 +81,9 @@ body {
 .status--running {
   color: var(--accent);
 }
+.status--attention {
+  color: var(--warn);
+}
 .status--done {
   color: var(--ok);
 }
@@ -406,9 +409,48 @@ body {
   border-top: 1px solid var(--border);
   padding: 12px 16px;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-elev);
+}
+
+.composer__row {
+  display: flex;
   gap: 12px;
   align-items: flex-end;
-  background: var(--bg-elev);
+}
+
+/* Slash-command autocomplete */
+.command-menu {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.command-menu__item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+.command-menu__item:hover {
+  background: var(--accent-strong);
+  color: white;
 }
 
 .composer__input {
@@ -426,6 +468,85 @@ body {
 .composer__input:focus {
   outline: none;
   border-color: var(--accent-strong);
+}
+
+/* ---- Interactive input panel (questions / permissions) ---- */
+.input-panel {
+  margin: 0 16px;
+  padding: 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input-panel__title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.input-panel__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question__header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.question__text {
+  font-size: 14px;
+}
+
+.question__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option {
+  text-align: left;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.option:hover {
+  border-color: var(--accent);
+}
+
+.option--selected {
+  border-color: var(--accent-strong);
+  background: rgba(108, 140, 255, 0.12);
+}
+
+.option__label {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.option__desc {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 /* ---- Buttons ---- */

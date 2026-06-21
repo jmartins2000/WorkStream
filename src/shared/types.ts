@@ -55,11 +55,37 @@ export interface TranscriptMessage {
   timestamp: number | null
 }
 
+/** A single option in a multiple-choice question. */
+export interface UiQuestionOption {
+  label: string
+  description: string
+}
+
+/** A multiple-choice question Claude asks via the AskUserQuestion tool. */
+export interface UiQuestion {
+  question: string
+  header: string
+  multiSelect: boolean
+  options: UiQuestionOption[]
+}
+
+/** Something Claude needs from the user mid-run: an answer or an approval. */
+export type InputRequest =
+  | { kind: 'question'; requestId: string; questions: UiQuestion[] }
+  | { kind: 'permission'; requestId: string; toolName: string; detail: string }
+
+/** The user's reply to an InputRequest, sent back to the runner. */
+export type InputResponse =
+  | { kind: 'question'; answers: Record<string, string> }
+  | { kind: 'permission'; decision: 'allow' | 'allow-always' | 'deny' }
+
 /** Streaming events emitted while a query runs, pushed to the renderer. */
 export type RunEvent =
   | { type: 'started'; runId: string; sessionId: string | null }
+  | { type: 'slashCommands'; runId: string; commands: string[] }
   | { type: 'delta'; runId: string; text: string }
   | { type: 'message'; runId: string; message: TranscriptMessage }
+  | { type: 'needsInput'; runId: string; request: InputRequest }
   | { type: 'error'; runId: string; message: string }
   | {
       type: 'completed'
@@ -89,6 +115,8 @@ export interface ClaudeBridge {
   getMessages(projectDir: string, sessionId: string): Promise<TranscriptMessage[]>
   startRun(options: StartRunOptions): Promise<StartRunResult>
   cancelRun(runId: string): Promise<void>
+  /** Reply to a mid-run InputRequest (question answer or permission decision). */
+  respondInput(requestId: string, response: InputResponse): Promise<void>
   /** Subscribe to streaming run events. Returns an unsubscribe function. */
   onRunEvent(listener: (event: RunEvent) => void): () => void
 }
@@ -99,5 +127,6 @@ export const IPC = {
   getMessages: 'claude:getMessages',
   startRun: 'claude:startRun',
   cancelRun: 'claude:cancelRun',
+  respondInput: 'claude:respondInput',
   runEvent: 'claude:runEvent'
 } as const

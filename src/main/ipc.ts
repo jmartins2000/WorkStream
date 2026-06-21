@@ -5,9 +5,9 @@
  */
 
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { IPC, type RunEvent, type StartRunOptions } from '../shared/types.js'
+import { IPC, type InputResponse, type RunEvent, type StartRunOptions } from '../shared/types.js'
 import { getMessages, listProjects, listSessions } from './claude/sessions.js'
-import { cancelRun, startRun } from './claude/runner.js'
+import { cancelRun, resolveInput, startRun } from './claude/runner.js'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.listProjects, () => listProjects())
@@ -30,5 +30,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.cancelRun, (_event, runId: string) => {
     cancelRun(runId)
+  })
+
+  ipcMain.handle(IPC.respondInput, (_event, requestId: string, response: InputResponse) => {
+    resolveInput(requestId, response)
   })
 }

@@ -8,32 +8,24 @@ type View = 'stremio' | 'claude'
 export function App(): JSX.Element {
   const stremioRef = useRef<StremioHandle>(null)
   const [view, setView] = useState<View>('claude')
-  // True after a run finishes until the user acknowledges by interacting.
-  const [finishedOk, setFinishedOk] = useState<boolean | null>(null)
 
-  // When a run finishes: pause Stremio and bring the cockpit forward.
-  const handleComplete = useCallback((ok: boolean) => {
+  // Claude needs the user (finished, asking a question, or requesting
+  // permission): pause Stremio and bring the cockpit forward.
+  const handleAttention = useCallback(() => {
     stremioRef.current?.pause()
-    setFinishedOk(ok)
     setView('claude')
   }, [])
 
-  const run = useClaudeRun(handleComplete)
+  const run = useClaudeRun(handleAttention)
 
-  // After sending a prompt, slide over to Stremio to watch while Claude works.
-  const handlePromptSent = useCallback(() => {
-    setFinishedOk(null)
-    setView('stremio')
-  }, [])
+  // User handed control back to Claude (sent a prompt or answered one): go watch.
+  const handleHandOff = useCallback(() => setView('stremio'), [])
 
-  const showClaude = useCallback(() => {
-    setFinishedOk(null)
-    setView('claude')
-  }, [])
-
+  const showClaude = useCallback(() => setView('claude'), [])
   const showStremio = useCallback(() => setView('stremio'), [])
 
-  const running = run.status === 'running'
+  const needsAttention =
+    view !== 'claude' && (run.status === 'awaiting-input' || run.status === 'done' || run.status === 'error')
 
   return (
     <div className="app">
@@ -44,13 +36,12 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbar__status">
-          {running && <span className="status status--running">● Claude working…</span>}
-          {!running && finishedOk === true && (
-            <span className="status status--done">✓ Claude finished</span>
+          {run.status === 'running' && <span className="status status--running">● Claude working…</span>}
+          {run.status === 'awaiting-input' && (
+            <span className="status status--attention">◆ Claude needs you</span>
           )}
-          {!running && finishedOk === false && (
-            <span className="status status--error">⚠ Claude stopped</span>
-          )}
+          {run.status === 'done' && <span className="status status--done">✓ Claude finished</span>}
+          {run.status === 'error' && <span className="status status--error">⚠ Claude stopped</span>}
         </div>
 
         <nav className="topbar__tabs">
@@ -60,9 +51,7 @@ export function App(): JSX.Element {
             onClick={showClaude}
           >
             Claude
-            {!running && finishedOk !== null && view !== 'claude' && (
-              <span className="tab__dot" />
-            )}
+            {needsAttention && <span className="tab__dot" />}
           </button>
           <button
             type="button"
@@ -80,7 +69,7 @@ export function App(): JSX.Element {
           <StremioPane ref={stremioRef} />
         </div>
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
-          <ClaudeCockpit run={run} onPromptSent={handlePromptSent} />
+          <ClaudeCockpit run={run} onHandOff={handleHandOff} />
         </div>
       </main>
     </div>

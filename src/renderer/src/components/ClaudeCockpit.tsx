@@ -5,15 +5,17 @@ import { useSessions } from '../useSessions'
 import { SessionSidebar } from './SessionSidebar'
 import { Transcript } from './Transcript'
 import { Composer } from './Composer'
+import { InputPanel } from './InputPanel'
 
 interface ClaudeCockpitProps {
   run: UseClaudeRun
-  /** Called after a prompt is sent, so the app can switch to Stremio. */
-  onPromptSent: () => void
+  /** Called after the user hands control back to Claude (sent a prompt or
+   *  answered a prompt), so the app can switch to Stremio. */
+  onHandOff: () => void
 }
 
 /** The full Claude Code workspace: session browser + transcript + composer. */
-export function ClaudeCockpit({ run, onPromptSent }: ClaudeCockpitProps): JSX.Element {
+export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Element {
   const sessions = useSessions()
   const [cwd, setCwd] = useState<string>('')
 
@@ -36,11 +38,17 @@ export function ClaudeCockpit({ run, onPromptSent }: ClaudeCockpitProps): JSX.El
   const handleSend = (prompt: string): void => {
     if (!cwd) return
     void run.start(prompt, cwd)
-    onPromptSent()
+    onHandOff()
+  }
+
+  const handleRespond: typeof run.respond = (response) => {
+    run.respond(response)
+    onHandOff()
   }
 
   const running = run.status === 'running'
-  const canSend = Boolean(cwd) && !running
+  const awaitingInput = run.status === 'awaiting-input'
+  const canSend = Boolean(cwd) && !running && !awaitingInput
 
   return (
     <div className="cockpit">
@@ -63,9 +71,13 @@ export function ClaudeCockpit({ run, onPromptSent }: ClaudeCockpitProps): JSX.El
           running={running}
         />
         {run.error && <div className="error-banner">{run.error}</div>}
+        {run.pendingRequest && (
+          <InputPanel request={run.pendingRequest} onRespond={handleRespond} />
+        )}
         <Composer
           running={running}
           disabled={!canSend}
+          commands={run.commands}
           onSend={handleSend}
           onCancel={run.cancel}
         />
