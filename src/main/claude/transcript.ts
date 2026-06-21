@@ -128,7 +128,8 @@ export function contentToParts(content: unknown): MessagePart[] {
       }
       case 'tool_use': {
         const name = typeof block.name === 'string' ? block.name : 'tool'
-        parts.push({ kind: 'tool', name, detail: toolDetail(block.input) })
+        const toolUseId = typeof block.id === 'string' ? block.id : undefined
+        parts.push({ kind: 'tool', name, detail: toolDetail(block.input), toolUseId })
         break
       }
       // tool_result and any unknown block types are dropped.
@@ -181,22 +182,70 @@ export function entryToMessage(entry: unknown, index: number): TranscriptMessage
   return { id, role, parts, timestamp: parseTimestamp(entry.timestamp) }
 }
 
+/** Flatten a content field (string or block array) to plain text. */
+function flattenText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const block of content) {
+    if (typeof block === 'string') parts.push(block)
+    else if (isRecord(block) && typeof block.text === 'string') parts.push(block.text)
+  }
+  return parts.join('\n')
+}
+
+/** Collect tool outputs keyed by tool_use_id from raw transcript entries. */
+export function collectToolResults(
+  entries: unknown[]
+): Map<string, { text: string; isError: boolean }> {
+  const map = new Map<string, { text: string; isError: boolean }>()
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue
+    const content = entryContent(entry)
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (!isRecord(block) || block.type !== 'tool_result') continue
+      const id = typeof block.tool_use_id === 'string' ? block.tool_use_id : ''
+      if (!id) continue
+      map.set(id, { text: flattenText(block.content).trim(), isError: block.is_error === true })
+    }
+  }
+  return map
+}
+
 /** Parse the raw text of a .jsonl file into curated transcript messages. */
 export function parseTranscript(raw: string): TranscriptMessage[] {
-  const messages: TranscriptMessage[] = []
-  const lines = raw.split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
-    let parsed: unknown
+  const entries: unknown[] = []
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
     try {
-      parsed = JSON.parse(line)
+      entries.push(JSON.parse(trimmed))
     } catch {
-      continue // tolerate truncated / partially written lines
+      // tolerate truncated / partially written lines
     }
-    const message = entryToMessage(parsed, i)
-    if (message) messages.push(message)
   }
+
+  const messages: TranscriptMessage[] = []
+  entries.forEach((entry, index) => {
+    const message = entryToMessage(entry, index)
+    if (message) messages.push(message)
+  })
+
+  // Attach each tool's output to its chip (history view).
+  const results = collectToolResults(entries)
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.kind === 'tool' && part.toolUseId) {
+        const result = results.get(part.toolUseId)
+        if (result) {
+          part.result = truncate(result.text, 4000)
+          part.isError = result.isError
+        }
+      }
+    }
+  }
+
   return messages
 }
 

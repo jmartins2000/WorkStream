@@ -27,6 +27,37 @@ function Thinking({ text }: { text: string }): JSX.Element {
   )
 }
 
+/** A tool call chip; expands to show the tool's output when available. */
+function ToolPart({
+  name,
+  detail,
+  result,
+  isError
+}: {
+  name: string
+  detail: string
+  result?: string
+  isError?: boolean
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const hasResult = typeof result === 'string' && result.length > 0
+  return (
+    <div className="tool">
+      <button
+        type="button"
+        className={'tool-chip' + (hasResult ? ' tool-chip--clickable' : '')}
+        onClick={() => hasResult && setOpen((o) => !o)}
+      >
+        {hasResult && <span className="tool-chip__caret">{open ? '▾' : '▸'}</span>}
+        <span className="tool-chip__name">{name}</span>
+        {detail && <span className="tool-chip__detail">{detail}</span>}
+        {isError && <span className="tool-chip__error">error</span>}
+      </button>
+      {open && hasResult && <pre className="tool-output">{result}</pre>}
+    </div>
+  )
+}
+
 /** Render a single message part (text, tool chip, or thinking). */
 function Part({ part }: { part: MessagePart }): JSX.Element | null {
   switch (part.kind) {
@@ -38,10 +69,12 @@ function Part({ part }: { part: MessagePart }): JSX.Element | null {
       )
     case 'tool':
       return (
-        <div className="tool-chip">
-          <span className="tool-chip__name">{part.name}</span>
-          {part.detail && <span className="tool-chip__detail">{part.detail}</span>}
-        </div>
+        <ToolPart
+          name={part.name}
+          detail={part.detail}
+          result={part.result}
+          isError={part.isError}
+        />
       )
     case 'thinking':
       return <Thinking text={part.text} />
