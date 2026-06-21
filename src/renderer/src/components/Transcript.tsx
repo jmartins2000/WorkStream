@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import type { MessagePart, TranscriptMessage } from '../../../shared/types'
+import { Markdown } from './Markdown'
 
 interface TranscriptProps {
   messages: TranscriptMessage[]
@@ -30,7 +31,11 @@ function Thinking({ text }: { text: string }): JSX.Element {
 function Part({ part }: { part: MessagePart }): JSX.Element | null {
   switch (part.kind) {
     case 'text':
-      return <div className="message__text">{part.text}</div>
+      return (
+        <div className="message__text">
+          <Markdown>{part.text}</Markdown>
+        </div>
+      )
     case 'tool':
       return (
         <div className="tool-chip">
@@ -82,7 +87,7 @@ export function Transcript({ messages, streamingText, running }: TranscriptProps
         <article className="message message--assistant message--streaming">
           <header className="message__role">Claude</header>
           <div className="message__parts">
-            <div className="message__text">{streamingText}</div>
+            <div className="message__text message__text--stream">{streamingText}</div>
           </div>
         </article>
       )}
