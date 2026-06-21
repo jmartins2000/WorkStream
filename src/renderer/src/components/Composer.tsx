@@ -1,15 +1,37 @@
-import { useState, type JSX, type KeyboardEvent } from 'react'
+import { useMemo, useState, type JSX, type KeyboardEvent } from 'react'
 
 interface ComposerProps {
   running: boolean
   disabled: boolean
+  commands: string[]
   onSend: (prompt: string) => void
   onCancel: () => void
 }
 
-/** Prompt input. Enter sends, Shift+Enter inserts a newline. */
-export function Composer({ running, disabled, onSend, onCancel }: ComposerProps): JSX.Element {
+/** Normalize a slash-command name to a bare name without the leading slash. */
+function bareName(command: string): string {
+  return command.startsWith('/') ? command.slice(1) : command
+}
+
+/** Prompt input with slash-command autocomplete. Enter sends, Shift+Enter newline. */
+export function Composer({
+  running,
+  disabled,
+  commands,
+  onSend,
+  onCancel
+}: ComposerProps): JSX.Element {
   const [value, setValue] = useState('')
+
+  // Show command suggestions while typing a leading slash token (no space yet).
+  const suggestions = useMemo(() => {
+    if (!value.startsWith('/') || value.includes(' ')) return []
+    const query = value.slice(1).toLowerCase()
+    return commands
+      .map(bareName)
+      .filter((name) => name.toLowerCase().startsWith(query))
+      .slice(0, 8)
+  }, [value, commands])
 
   const submit = (): void => {
     const trimmed = value.trim()
@@ -27,31 +49,48 @@ export function Composer({ running, disabled, onSend, onCancel }: ComposerProps)
 
   return (
     <div className="composer">
-      <textarea
-        className="composer__input"
-        placeholder={
-          running ? 'Claude is working — you can queue your next thought…' : 'Message Claude…'
-        }
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={3}
-      />
-      <div className="composer__actions">
-        {running ? (
-          <button type="button" className="btn btn--danger" onClick={onCancel}>
-            Stop
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={submit}
-            disabled={disabled || !value.trim()}
-          >
-            Send
-          </button>
-        )}
+      {suggestions.length > 0 && (
+        <ul className="command-menu">
+          {suggestions.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                className="command-menu__item"
+                onClick={() => setValue(`/${name} `)}
+              >
+                /{name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="composer__row">
+        <textarea
+          className="composer__input"
+          placeholder={
+            running ? 'Claude is working — you can queue your next thought…' : 'Message Claude…  (try / for commands)'
+          }
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={3}
+        />
+        <div className="composer__actions">
+          {running ? (
+            <button type="button" className="btn btn--danger" onClick={onCancel}>
+              Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={submit}
+              disabled={disabled || !value.trim()}
+            >
+              Send
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

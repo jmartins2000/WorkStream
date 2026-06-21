@@ -7,6 +7,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type ClaudeBridge,
+  type InputResponse,
   type ProjectSummary,
   type RunEvent,
   type SessionSummary,
@@ -24,6 +25,8 @@ const api: ClaudeBridge = {
   startRun: (options: StartRunOptions) =>
     ipcRenderer.invoke(IPC.startRun, options) as Promise<StartRunResult>,
   cancelRun: (runId: string) => ipcRenderer.invoke(IPC.cancelRun, runId) as Promise<void>,
+  respondInput: (requestId: string, response: InputResponse) =>
+    ipcRenderer.invoke(IPC.respondInput, requestId, response) as Promise<void>,
   onRunEvent: (listener: (event: RunEvent) => void) => {
     const handler = (_event: IpcRendererEvent, payload: RunEvent): void => listener(payload)
     ipcRenderer.on(IPC.runEvent, handler)
