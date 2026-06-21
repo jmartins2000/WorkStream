@@ -86,6 +86,7 @@ export type RunEvent =
   | { type: 'delta'; runId: string; text: string }
   | { type: 'message'; runId: string; message: TranscriptMessage }
   | { type: 'needsInput'; runId: string; request: InputRequest }
+  | { type: 'usage'; runId: string; usage: RunUsage }
   | { type: 'error'; runId: string; message: string }
   | {
       type: 'completed'
@@ -95,6 +96,31 @@ export type RunEvent =
       ok: boolean
     }
 
+/** Model aliases offered in the UI (maps to the SDK `model` option). */
+export const RUN_MODELS = ['default', 'opus', 'sonnet', 'haiku', 'fable', 'opusplan'] as const
+export type RunModel = (typeof RUN_MODELS)[number]
+
+/** Reasoning effort levels (maps to the SDK `effort` option). */
+export const RUN_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export type RunEffort = (typeof RUN_EFFORTS)[number]
+
+/** Permission modes selectable per run (subset of the SDK's modes). */
+export const RUN_PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const
+export type RunPermissionMode = (typeof RUN_PERMISSION_MODES)[number]
+
+/** Per-run configuration mirroring /model, /effort and permission-mode cycling. */
+export interface RunSettings {
+  model: RunModel
+  effort: RunEffort
+  permissionMode: RunPermissionMode
+}
+
+export const DEFAULT_RUN_SETTINGS: RunSettings = {
+  model: 'default',
+  effort: 'high',
+  permissionMode: 'default'
+}
+
 /** Options for starting a new or resumed run. */
 export interface StartRunOptions {
   prompt: string
@@ -102,6 +128,16 @@ export interface StartRunOptions {
   cwd: string
   /** Existing session id to resume; omit to start a fresh session. */
   resumeSessionId?: string
+  /** Per-run model / effort / permission settings. */
+  settings?: RunSettings
+}
+
+/** Cost and token usage reported at the end of a run. */
+export interface RunUsage {
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+  numTurns: number
 }
 
 export interface StartRunResult {
@@ -113,6 +149,10 @@ export interface ClaudeBridge {
   listProjects(): Promise<ProjectSummary[]>
   listSessions(projectDir: string): Promise<SessionSummary[]>
   getMessages(projectDir: string, sessionId: string): Promise<TranscriptMessage[]>
+  /** Set a session's custom title (like /rename). */
+  renameSession(sessionId: string, title: string, cwd: string): Promise<void>
+  /** Permanently delete a session's transcript. */
+  deleteSession(sessionId: string, cwd: string): Promise<void>
   startRun(options: StartRunOptions): Promise<StartRunResult>
   cancelRun(runId: string): Promise<void>
   /** Reply to a mid-run InputRequest (question answer or permission decision). */
@@ -125,6 +165,8 @@ export const IPC = {
   listProjects: 'claude:listProjects',
   listSessions: 'claude:listSessions',
   getMessages: 'claude:getMessages',
+  renameSession: 'claude:renameSession',
+  deleteSession: 'claude:deleteSession',
   startRun: 'claude:startRun',
   cancelRun: 'claude:cancelRun',
   respondInput: 'claude:respondInput',

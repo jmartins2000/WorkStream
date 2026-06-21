@@ -11,7 +11,11 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { listSessions as sdkListSessions } from '@anthropic-ai/claude-agent-sdk'
+import {
+  deleteSession as sdkDeleteSession,
+  listSessions as sdkListSessions,
+  renameSession as sdkRenameSession
+} from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectSummary, SessionSummary, TranscriptMessage } from '../../shared/types.js'
 import { decodeProjectDir, parseTranscript, summarizeSession } from './transcript.js'
 
@@ -134,6 +138,20 @@ export async function listSessions(projectDir: string): Promise<SessionSummary[]
 
   sessions.sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0))
   return sessions
+}
+
+/** Set a session's custom title (mirrors /rename). */
+export async function renameSession(
+  sessionId: string,
+  title: string,
+  cwd: string
+): Promise<void> {
+  await sdkRenameSession(sessionId, title, { dir: cwd })
+}
+
+/** Permanently delete a session. */
+export async function deleteSession(sessionId: string, cwd: string): Promise<void> {
+  await sdkDeleteSession(sessionId, { dir: cwd })
 }
 
 /** Read and parse the full transcript for one session. */

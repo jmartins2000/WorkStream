@@ -6,7 +6,13 @@
 
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { IPC, type InputResponse, type RunEvent, type StartRunOptions } from '../shared/types.js'
-import { getMessages, listProjects, listSessions } from './claude/sessions.js'
+import {
+  deleteSession,
+  getMessages,
+  listProjects,
+  listSessions,
+  renameSession
+} from './claude/sessions.js'
 import { cancelRun, resolveInput, startRun } from './claude/runner.js'
 
 export function registerIpcHandlers(): void {
@@ -16,6 +22,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.getMessages, (_event, projectDir: string, sessionId: string) =>
     getMessages(projectDir, sessionId)
+  )
+
+  ipcMain.handle(IPC.renameSession, (_event, sessionId: string, title: string, cwd: string) =>
+    renameSession(sessionId, title, cwd)
+  )
+
+  ipcMain.handle(IPC.deleteSession, (_event, sessionId: string, cwd: string) =>
+    deleteSession(sessionId, cwd)
   )
 
   ipcMain.handle(IPC.startRun, (event: IpcMainInvokeEvent, options: StartRunOptions) => {

@@ -1,11 +1,12 @@
 import { useEffect, useState, type JSX } from 'react'
-import type { SessionSummary } from '../../../shared/types'
+import { DEFAULT_RUN_SETTINGS, type RunSettings, type SessionSummary } from '../../../shared/types'
 import type { UseClaudeRun } from '../useClaudeRun'
 import { useSessions } from '../useSessions'
 import { SessionSidebar } from './SessionSidebar'
 import { Transcript } from './Transcript'
 import { Composer } from './Composer'
 import { InputPanel } from './InputPanel'
+import { RunSettingsBar } from './RunSettings'
 
 interface ClaudeCockpitProps {
   run: UseClaudeRun
@@ -18,6 +19,7 @@ interface ClaudeCockpitProps {
 export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Element {
   const sessions = useSessions()
   const [cwd, setCwd] = useState<string>('')
+  const [settings, setSettings] = useState<RunSettings>(DEFAULT_RUN_SETTINGS)
 
   // Default the working directory to the selected project's path.
   useEffect(() => {
@@ -37,8 +39,23 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
 
   const handleSend = (prompt: string): void => {
     if (!cwd) return
-    void run.start(prompt, cwd)
+    void run.start(prompt, cwd, settings)
     onHandOff()
+  }
+
+  const handleRename = async (session: SessionSummary): Promise<void> => {
+    const title = window.prompt('Rename session', session.title)
+    if (title && title.trim()) {
+      await window.claude.renameSession(session.sessionId, title.trim(), session.cwd)
+      await sessions.refresh()
+    }
+  }
+
+  const handleDelete = async (session: SessionSummary): Promise<void> => {
+    if (!window.confirm(`Delete session "${session.title}"? This cannot be undone.`)) return
+    await window.claude.deleteSession(session.sessionId, session.cwd)
+    if (session.sessionId === run.sessionId) run.setMessages([], null)
+    await sessions.refresh()
   }
 
   const handleRespond: typeof run.respond = (response) => {
@@ -62,9 +79,24 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
         onSelectSession={(session) => void handleSelectSession(session)}
         onNewSession={handleNewSession}
         onRefresh={() => void sessions.refresh()}
+        onRenameSession={(session) => void handleRename(session)}
+        onDeleteSession={(session) => void handleDelete(session)}
       />
 
       <section className="cockpit__main">
+        <div className="cockpit__bar">
+          <RunSettingsBar
+            settings={settings}
+            onChange={setSettings}
+            disabled={running || awaitingInput}
+          />
+          {run.usage && (
+            <span className="usage" title="Cost and tokens for the last run">
+              ${run.usage.costUsd.toFixed(4)} · {run.usage.inputTokens.toLocaleString()} in /{' '}
+              {run.usage.outputTokens.toLocaleString()} out
+            </span>
+          )}
+        </div>
         <Transcript
           messages={run.messages}
           streamingText={run.streamingText}
