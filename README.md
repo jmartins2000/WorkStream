@@ -51,15 +51,15 @@ when Claude is done and waiting on you.
 
 ## Prerequisites
 
-- **Node.js 22+** and **pnpm 10+**
+- **Node.js 22+** (npm ships with it — nothing else to install)
 - A working **Claude Code** login (the app reuses your existing `~/.claude`
   credentials and sessions).
 
 ## Develop
 
 ```bash
-pnpm install
-pnpm dev        # launches the app with hot reload
+npm install
+npm run dev     # launches the app with hot reload
 ```
 
 > Note: this is a desktop GUI app, so it must be run on a machine with a
@@ -68,16 +68,16 @@ pnpm dev        # launches the app with hot reload
 ## Quality gates
 
 ```bash
-pnpm typecheck  # tsc for both Node and web configs
-pnpm test       # vitest unit + filesystem integration tests
-pnpm lint       # eslint
-pnpm build      # production build into ./out
+npm run typecheck  # tsc for both Node and web configs
+npm test           # vitest unit + filesystem integration tests
+npm run lint       # eslint
+npm run build      # production build into ./out
 ```
 
 ## Package a macOS app
 
 ```bash
-pnpm package    # electron-builder → ./release (.dmg + .zip)
+npm run package    # electron-builder → ./release (.dmg + .zip)
 ```
 
 Code signing / notarization are configured at release time.
