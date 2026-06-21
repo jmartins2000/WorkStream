@@ -32,7 +32,11 @@ function createWindow(): BrowserWindow {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
   if (isDev && devServerUrl) {
     void window.loadURL(devServerUrl)
-    window.webContents.openDevTools({ mode: 'detach' })
+    // DevTools are opt-in (run with OPEN_DEVTOOLS=1) so normal dev use isn't
+    // cluttered. Toggle anytime with Cmd+Option+I.
+    if (process.env.OPEN_DEVTOOLS === '1') {
+      window.webContents.openDevTools({ mode: 'detach' })
+    }
   } else {
     void window.loadFile(join(__dirname, '../renderer/index.html'))
   }
