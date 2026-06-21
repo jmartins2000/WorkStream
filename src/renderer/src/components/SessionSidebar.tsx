@@ -11,6 +11,8 @@ interface SessionSidebarProps {
   onSelectSession: (session: SessionSummary) => void
   onNewSession: () => void
   onRefresh: () => void
+  onRenameSession: (session: SessionSummary) => void
+  onDeleteSession: (session: SessionSummary) => void
 }
 
 function basename(path: string): string {
@@ -38,7 +40,9 @@ export function SessionSidebar({
   onSelectProject,
   onSelectSession,
   onNewSession,
-  onRefresh
+  onRefresh,
+  onRenameSession,
+  onDeleteSession
 }: SessionSidebarProps): JSX.Element {
   return (
     <aside className="sidebar">
@@ -80,13 +84,16 @@ export function SessionSidebar({
             <li className="session-list__empty">No sessions yet</li>
           )}
           {sessions.map((session) => (
-            <li key={session.sessionId}>
+            <li
+              key={session.sessionId}
+              className={
+                'session-row' +
+                (session.sessionId === activeSessionId ? ' session-row--active' : '')
+              }
+            >
               <button
                 type="button"
-                className={
-                  'session-item' +
-                  (session.sessionId === activeSessionId ? ' session-item--active' : '')
-                }
+                className="session-item"
                 onClick={() => onSelectSession(session)}
               >
                 <span className="session-item__title">{session.title}</span>
@@ -95,6 +102,24 @@ export function SessionSidebar({
                   {session.messageCount} msgs · {formatTime(session.lastActivity)}
                 </span>
               </button>
+              <div className="session-row__actions">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Rename"
+                  onClick={() => onRenameSession(session)}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--danger"
+                  title="Delete"
+                  onClick={() => onDeleteSession(session)}
+                >
+                  🗑
+                </button>
+              </div>
             </li>
           ))}
         </ul>

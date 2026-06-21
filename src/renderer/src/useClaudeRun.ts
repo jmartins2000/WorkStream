@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { InputRequest, InputResponse, RunEvent, TranscriptMessage } from '../../shared/types'
+import type {
+  InputRequest,
+  InputResponse,
+  RunEvent,
+  RunSettings,
+  RunUsage,
+  TranscriptMessage
+} from '../../shared/types'
 
 export type RunStatus = 'idle' | 'running' | 'awaiting-input' | 'done' | 'error'
 
@@ -13,8 +20,10 @@ export interface UseClaudeRun {
   commands: string[]
   /** A pending question/permission Claude is waiting on, if any. */
   pendingRequest: InputRequest | null
+  /** Cost/token usage from the most recent completed run, if any. */
+  usage: RunUsage | null
   setMessages: (messages: TranscriptMessage[], sessionId: string | null) => void
-  start: (prompt: string, cwd: string) => Promise<void>
+  start: (prompt: string, cwd: string, settings?: RunSettings) => Promise<void>
   cancel: () => void
   /** Reply to the pending input request. */
   respond: (response: InputResponse) => void
@@ -34,6 +43,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
   const [error, setError] = useState<string | null>(null)
   const [commands, setCommands] = useState<string[]>([])
   const [pendingRequest, setPendingRequest] = useState<InputRequest | null>(null)
+  const [usage, setUsage] = useState<RunUsage | null>(null)
 
   const activeRunId = useRef<string | null>(null)
   const onAttentionRef = useRef(onAttention)
@@ -67,6 +77,10 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
           setPendingRequest(event.request)
           setStatus('awaiting-input')
           onAttentionRef.current()
+          break
+
+        case 'usage':
+          setUsage(event.usage)
           break
 
         case 'error':
@@ -110,7 +124,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
   }, [])
 
   const start = useCallback(
-    async (prompt: string, cwd: string) => {
+    async (prompt: string, cwd: string, settings?: RunSettings) => {
       const trimmed = prompt.trim()
       if (!trimmed || activeRunId.current) return
 
@@ -128,7 +142,8 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
       const { runId } = await window.claude.startRun({
         prompt: trimmed,
         cwd,
-        resumeSessionId: sessionId ?? undefined
+        resumeSessionId: sessionId ?? undefined,
+        settings
       })
       activeRunId.current = runId
     },
@@ -157,6 +172,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     error,
     commands,
     pendingRequest,
+    usage,
     setMessages,
     start,
     cancel,

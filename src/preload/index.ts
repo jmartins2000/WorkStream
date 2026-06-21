@@ -22,6 +22,10 @@ const api: ClaudeBridge = {
     ipcRenderer.invoke(IPC.listSessions, projectDir) as Promise<SessionSummary[]>,
   getMessages: (projectDir: string, sessionId: string) =>
     ipcRenderer.invoke(IPC.getMessages, projectDir, sessionId) as Promise<TranscriptMessage[]>,
+  renameSession: (sessionId: string, title: string, cwd: string) =>
+    ipcRenderer.invoke(IPC.renameSession, sessionId, title, cwd) as Promise<void>,
+  deleteSession: (sessionId: string, cwd: string) =>
+    ipcRenderer.invoke(IPC.deleteSession, sessionId, cwd) as Promise<void>,
   startRun: (options: StartRunOptions) =>
     ipcRenderer.invoke(IPC.startRun, options) as Promise<StartRunResult>,
   cancelRun: (runId: string) => ipcRenderer.invoke(IPC.cancelRun, runId) as Promise<void>,

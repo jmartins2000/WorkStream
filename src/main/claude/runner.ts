@@ -16,7 +16,7 @@ import {
   type PermissionMode,
   type PermissionResult
 } from '@anthropic-ai/claude-agent-sdk'
-import type { InputResponse, RunEvent, StartRunOptions } from '../../shared/types.js'
+import type { InputResponse, RunEvent, RunUsage, StartRunOptions } from '../../shared/types.js'
 import { contentToParts, toolDetail } from './transcript.js'
 import { parseQuestions, withAnswers } from './interaction.js'
 
@@ -126,15 +126,19 @@ async function drive(
 ): Promise<void> {
   let sessionId: string | null = options.resumeSessionId ?? null
 
+  const settings = options.settings
   const queryOptions: Options = {
     cwd: options.cwd,
     includePartialMessages: true,
-    permissionMode: DEFAULT_PERMISSION_MODE,
+    permissionMode: settings?.permissionMode ?? DEFAULT_PERMISSION_MODE,
     allowedTools: AUTO_ALLOWED_TOOLS,
     canUseTool: makeCanUseTool(runId, emit, abort),
     abortController: abort
   }
   if (options.resumeSessionId) queryOptions.resume = options.resumeSessionId
+  // 'default' means "let the account/CLI pick" — leave the option unset.
+  if (settings?.model && settings.model !== 'default') queryOptions.model = settings.model
+  if (settings?.effort) queryOptions.effort = settings.effort
 
   try {
     const response = query({ prompt: options.prompt, options: queryOptions })
@@ -179,6 +183,8 @@ async function drive(
         }
 
         case 'result': {
+          const usage = extractUsage(msg)
+          if (usage) emit({ type: 'usage', runId, usage })
           emit({ type: 'completed', runId, sessionId, ok: !msg.is_error })
           break
         }
@@ -202,4 +208,18 @@ async function drive(
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err)
+}
+
+/** Pull cost/token usage out of a result message, defensively. */
+function extractUsage(msg: unknown): RunUsage | null {
+  if (typeof msg !== 'object' || msg === null) return null
+  const record = msg as Record<string, unknown>
+  const usage = (record.usage ?? {}) as Record<string, unknown>
+  const num = (value: unknown): number => (typeof value === 'number' ? value : 0)
+  return {
+    costUsd: num(record.total_cost_usd),
+    inputTokens: num(usage.input_tokens),
+    outputTokens: num(usage.output_tokens),
+    numTurns: num(record.num_turns)
+  }
 }
