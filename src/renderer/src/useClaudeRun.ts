@@ -74,7 +74,7 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
                 {
                   id: `stream-${Date.now()}`,
                   role: 'assistant',
-                  text: trailing,
+                  parts: [{ kind: 'text', text: trailing }],
                   timestamp: Date.now()
                 }
               ])
@@ -111,7 +111,7 @@ export function useClaudeRun(onComplete: (ok: boolean) => void): UseClaudeRun {
       const userMessage: TranscriptMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
-        text: trimmed,
+        parts: [{ kind: 'text', text: trimmed }],
         timestamp: Date.now()
       }
       setMessagesState((prev) => [...prev, userMessage])

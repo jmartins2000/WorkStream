@@ -308,6 +308,12 @@ body {
   margin-bottom: 4px;
 }
 
+.message__parts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .message__text {
   white-space: pre-wrap;
   word-break: break-word;
@@ -316,6 +322,58 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
+}
+
+/* Compact representation of a tool call, like the CLI's tool lines. */
+.tool-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.tool-chip__name {
+  color: var(--accent);
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.tool-chip__detail {
+  color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thinking-block {
+  font-size: 13px;
+}
+
+.thinking-block__toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 0;
+  font: inherit;
+  font-style: italic;
+}
+
+.thinking-block__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-dim);
+  border-left: 2px solid var(--border);
+  padding: 6px 0 6px 12px;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .message--user .message__text {

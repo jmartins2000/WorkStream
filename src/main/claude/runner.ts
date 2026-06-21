@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto'
 import { query, type Options, type PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { RunEvent, StartRunOptions } from '../../shared/types.js'
-import { extractText } from './transcript.js'
+import { contentToParts } from './transcript.js'
 
 /**
  * Background runs are autonomous — the user is off watching Stremio — so we
@@ -92,12 +92,12 @@ async function drive(
         }
 
         case 'assistant': {
-          const text = extractText(msg.message?.content)
-          if (text) {
+          const parts = contentToParts(msg.message?.content)
+          if (parts.length > 0) {
             emit({
               type: 'message',
               runId,
-              message: { id: msg.uuid, role: 'assistant', text, timestamp: Date.now() }
+              message: { id: msg.uuid, role: 'assistant', parts, timestamp: Date.now() }
             })
           }
           break
