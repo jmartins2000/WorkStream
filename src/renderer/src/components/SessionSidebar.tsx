@@ -13,6 +13,7 @@ interface SessionSidebarProps {
   onRefresh: () => void
   onRenameSession: (session: SessionSummary) => void
   onDeleteSession: (session: SessionSummary) => void
+  onForkSession: (session: SessionSummary) => void
 }
 
 function basename(path: string): string {
@@ -42,7 +43,8 @@ export function SessionSidebar({
   onNewSession,
   onRefresh,
   onRenameSession,
-  onDeleteSession
+  onDeleteSession,
+  onForkSession
 }: SessionSidebarProps): JSX.Element {
   return (
     <aside className="sidebar">
@@ -103,6 +105,14 @@ export function SessionSidebar({
                 </span>
               </button>
               <div className="session-row__actions">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Fork / branch"
+                  onClick={() => onForkSession(session)}
+                >
+                  ⑂
+                </button>
                 <button
                   type="button"
                   className="icon-btn"

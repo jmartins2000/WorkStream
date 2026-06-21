@@ -14,6 +14,16 @@ const ROLE_LABEL: Record<TranscriptMessage['role'], string> = {
   system: 'System'
 }
 
+/** Plain-text rendering of a message's parts, for copy-to-clipboard. */
+function messageToText(message: TranscriptMessage): string {
+  return message.parts
+    .map((part) => {
+      if (part.kind === 'text' || part.kind === 'thinking') return part.text
+      return `${part.name}${part.detail ? ': ' + part.detail : ''}`
+    })
+    .join('\n\n')
+}
+
 /** A collapsed extended-thinking block, expandable on click. */
 function Thinking({ text }: { text: string }): JSX.Element {
   const [open, setOpen] = useState(false)
@@ -107,7 +117,17 @@ export function Transcript({ messages, streamingText, running }: TranscriptProps
     <div className="transcript">
       {messages.map((message) => (
         <article key={message.id} className={`message message--${message.role}`}>
-          <header className="message__role">{ROLE_LABEL[message.role]}</header>
+          <header className="message__role">
+            {ROLE_LABEL[message.role]}
+            <button
+              type="button"
+              className="message__copy"
+              title="Copy message"
+              onClick={() => void navigator.clipboard.writeText(messageToText(message))}
+            >
+              ⧉
+            </button>
+          </header>
           <div className="message__parts">
             {message.parts.map((part, index) => (
               <Part key={index} part={part} />

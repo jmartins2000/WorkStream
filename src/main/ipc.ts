@@ -4,10 +4,12 @@
  * started the run via the `IPC.runEvent` channel.
  */
 
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { writeFile } from 'node:fs/promises'
 import { IPC, type InputResponse, type RunEvent, type StartRunOptions } from '../shared/types.js'
 import {
   deleteSession,
+  forkSession,
   getMessages,
   listProjects,
   listSessions,
@@ -30,6 +32,25 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.deleteSession, (_event, sessionId: string, cwd: string) =>
     deleteSession(sessionId, cwd)
+  )
+
+  ipcMain.handle(IPC.forkSession, (_event, sessionId: string, cwd: string) =>
+    forkSession(sessionId, cwd)
+  )
+
+  ipcMain.handle(
+    IPC.exportTranscript,
+    async (event: IpcMainInvokeEvent, defaultName: string, content: string) => {
+      const window = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const { canceled, filePath } = await dialog.showSaveDialog(window!, {
+        title: 'Export transcript',
+        defaultPath: defaultName,
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      })
+      if (canceled || !filePath) return null
+      await writeFile(filePath, content, 'utf8')
+      return filePath
+    }
   )
 
   ipcMain.handle(IPC.startRun, (event: IpcMainInvokeEvent, options: StartRunOptions) => {

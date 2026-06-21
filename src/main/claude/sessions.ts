@@ -13,11 +13,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   deleteSession as sdkDeleteSession,
+  forkSession as sdkForkSession,
   listSessions as sdkListSessions,
   renameSession as sdkRenameSession
 } from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectSummary, SessionSummary, TranscriptMessage } from '../../shared/types.js'
-import { decodeProjectDir, parseTranscript, summarizeSession } from './transcript.js'
+import { decodeProjectDir, extractCwd, parseTranscript, summarizeSession } from './transcript.js'
 
 /** Title/branch metadata the SDK derives (including /rename custom titles). */
 interface SdkMeta {
@@ -86,21 +87,33 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     if (files.length === 0) continue
 
     let lastActivity: number | null = null
+    let newestFile: string | null = null
     for (const file of files) {
       try {
         const mtime = (await stat(join(dirPath, file))).mtimeMs
-        if (lastActivity === null || mtime > lastActivity) lastActivity = mtime
+        if (lastActivity === null || mtime > lastActivity) {
+          lastActivity = mtime
+          newestFile = file
+        }
       } catch {
         // ignore unreadable files
       }
     }
 
-    projects.push({
-      dirName,
-      cwd: decodeProjectDir(dirName),
-      sessionCount: files.length,
-      lastActivity
-    })
+    // Decoding the folder name (dashes -> slashes) is lossy when the real path
+    // contains '-' or '.', producing a non-existent directory. The transcript
+    // records the true cwd, so read it from the newest session instead.
+    let cwd = decodeProjectDir(dirName)
+    if (newestFile) {
+      try {
+        const realCwd = extractCwd(await readFile(join(dirPath, newestFile), 'utf8'))
+        if (realCwd) cwd = realCwd
+      } catch {
+        // fall back to the decoded path
+      }
+    }
+
+    projects.push({ dirName, cwd, sessionCount: files.length, lastActivity })
   }
 
   projects.sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0))
@@ -152,6 +165,12 @@ export async function renameSession(
 /** Permanently delete a session. */
 export async function deleteSession(sessionId: string, cwd: string): Promise<void> {
   await sdkDeleteSession(sessionId, { dir: cwd })
+}
+
+/** Fork a session at its current point (mirrors /branch); returns the new id. */
+export async function forkSession(sessionId: string, cwd: string): Promise<string> {
+  const result = await sdkForkSession(sessionId, { dir: cwd })
+  return result.sessionId
 }
 
 /** Read and parse the full transcript for one session. */

@@ -1,5 +1,10 @@
 import { useEffect, useState, type JSX } from 'react'
-import { DEFAULT_RUN_SETTINGS, type RunSettings, type SessionSummary } from '../../../shared/types'
+import {
+  DEFAULT_RUN_SETTINGS,
+  type RunSettings,
+  type SessionSummary,
+  type TranscriptMessage
+} from '../../../shared/types'
 import type { UseClaudeRun } from '../useClaudeRun'
 import { useSessions } from '../useSessions'
 import { SessionSidebar } from './SessionSidebar'
@@ -7,6 +12,29 @@ import { Transcript } from './Transcript'
 import { Composer } from './Composer'
 import { InputPanel } from './InputPanel'
 import { RunSettingsBar } from './RunSettings'
+
+const ROLE_LABEL: Record<TranscriptMessage['role'], string> = {
+  user: 'You',
+  assistant: 'Claude',
+  system: 'System'
+}
+
+/** Render a transcript as markdown for export. */
+function transcriptToMarkdown(messages: TranscriptMessage[]): string {
+  return messages
+    .map((message) => {
+      const body = message.parts
+        .map((part) => {
+          if (part.kind === 'text') return part.text
+          if (part.kind === 'thinking') return `_(thinking)_\n\n${part.text}`
+          const head = `\`${part.name}${part.detail ? ': ' + part.detail : ''}\``
+          return part.result ? `${head}\n\n\`\`\`\n${part.result}\n\`\`\`` : head
+        })
+        .join('\n\n')
+      return `### ${ROLE_LABEL[message.role]}\n\n${body}`
+    })
+    .join('\n\n---\n\n')
+}
 
 interface ClaudeCockpitProps {
   run: UseClaudeRun
@@ -58,6 +86,21 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
     await sessions.refresh()
   }
 
+  const handleFork = async (session: SessionSummary): Promise<void> => {
+    const newId = await window.claude.forkSession(session.sessionId, session.cwd)
+    await sessions.refresh()
+    // Load the fork's transcript so the user continues on the branch.
+    const messages = await window.claude.getMessages(session.projectDir, newId)
+    setCwd(session.cwd)
+    run.setMessages(messages, newId)
+  }
+
+  const handleExport = async (): Promise<void> => {
+    if (run.messages.length === 0) return
+    const name = `claude-session-${run.sessionId ?? 'new'}.md`
+    await window.claude.exportTranscript(name, transcriptToMarkdown(run.messages))
+  }
+
   const handleRespond: typeof run.respond = (response) => {
     run.respond(response)
     onHandOff()
@@ -81,6 +124,7 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
         onRefresh={() => void sessions.refresh()}
         onRenameSession={(session) => void handleRename(session)}
         onDeleteSession={(session) => void handleDelete(session)}
+        onForkSession={(session) => void handleFork(session)}
       />
 
       <section className="cockpit__main">
@@ -90,12 +134,23 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
             onChange={setSettings}
             disabled={running || awaitingInput}
           />
-          {run.usage && (
-            <span className="usage" title="Cost and tokens for the last run">
-              ${run.usage.costUsd.toFixed(4)} · {run.usage.inputTokens.toLocaleString()} in /{' '}
-              {run.usage.outputTokens.toLocaleString()} out
-            </span>
-          )}
+          <div className="cockpit__bar-right">
+            {run.usage && (
+              <span className="usage" title="Cost and tokens for the last run">
+                ${run.usage.costUsd.toFixed(4)} · {run.usage.inputTokens.toLocaleString()} in /{' '}
+                {run.usage.outputTokens.toLocaleString()} out
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => void handleExport()}
+              disabled={run.messages.length === 0}
+              title="Export transcript to markdown"
+            >
+              Export
+            </button>
+          </div>
         </div>
         <Transcript
           messages={run.messages}
