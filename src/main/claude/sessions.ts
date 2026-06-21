@@ -11,8 +11,37 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { listSessions as sdkListSessions } from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectSummary, SessionSummary, TranscriptMessage } from '../../shared/types.js'
 import { decodeProjectDir, parseTranscript, summarizeSession } from './transcript.js'
+
+/** Title/branch metadata the SDK derives (including /rename custom titles). */
+interface SdkMeta {
+  title?: string
+  gitBranch?: string
+}
+
+/**
+ * Build a sessionId -> metadata map from the SDK's session index. The SDK is
+ * the source of truth for display titles (custom /rename titles, summaries),
+ * which the raw JSONL does not expose conveniently. Failures are non-fatal —
+ * callers fall back to the first prompt.
+ */
+async function sdkTitleMap(): Promise<Map<string, SdkMeta>> {
+  const map = new Map<string, SdkMeta>()
+  try {
+    const sessions = await sdkListSessions()
+    for (const session of sessions) {
+      map.set(session.sessionId, {
+        title: session.customTitle || session.summary || session.firstPrompt,
+        gitBranch: session.gitBranch
+      })
+    }
+  } catch {
+    // SDK unavailable or no sessions; titles fall back to parsed prompts.
+  }
+  return map
+}
 
 /** Absolute path to the Claude config directory. */
 export function claudeConfigDir(): string {
@@ -79,6 +108,7 @@ export async function listSessions(projectDir: string): Promise<SessionSummary[]
   const dirPath = join(projectsDir(), projectDir)
   const files = (await safeReaddir(dirPath)).filter((f) => f.endsWith('.jsonl'))
   const fallbackCwd = decodeProjectDir(projectDir)
+  const titles = await sdkTitleMap()
   const sessions: SessionSummary[] = []
 
   for (const file of files) {
@@ -89,7 +119,17 @@ export async function listSessions(projectDir: string): Promise<SessionSummary[]
     } catch {
       continue
     }
-    sessions.push(summarizeSession({ sessionId, projectDir, raw, fallbackCwd }))
+    const meta = titles.get(sessionId)
+    sessions.push(
+      summarizeSession({
+        sessionId,
+        projectDir,
+        raw,
+        fallbackCwd,
+        title: meta?.title,
+        gitBranch: meta?.gitBranch
+      })
+    )
   }
 
   sessions.sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0))

@@ -71,7 +71,11 @@ describe('sessions (filesystem)', () => {
 
   it('reads a full transcript by session id', async () => {
     const messages = await getMessages('-work-demo', 'session-123')
-    expect(messages.map((m) => ({ role: m.role, text: m.text }))).toEqual([
+    const flattened = messages.map((m) => ({
+      role: m.role,
+      text: m.parts[0].kind === 'text' ? m.parts[0].text : ''
+    }))
+    expect(flattened).toEqual([
       { role: 'user', text: 'Fix the bug' },
       { role: 'assistant', text: 'Fixed it.' }
     ])

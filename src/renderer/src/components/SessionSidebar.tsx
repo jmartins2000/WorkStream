@@ -91,6 +91,7 @@ export function SessionSidebar({
               >
                 <span className="session-item__title">{session.title}</span>
                 <span className="session-item__meta">
+                  {session.gitBranch ? `⎇ ${session.gitBranch} · ` : ''}
                   {session.messageCount} msgs · {formatTime(session.lastActivity)}
                 </span>
               </button>

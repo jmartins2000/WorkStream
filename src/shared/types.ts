@@ -23,26 +23,34 @@ export interface SessionSummary {
   projectDir: string
   /** Decoded working directory for the session. */
   cwd: string
-  /** First human prompt, used as a human-readable title. */
+  /** Display title: custom (/rename) title, else summary, else first prompt. */
   title: string
+  /** Git branch recorded for the session, if any. */
+  gitBranch?: string
   /** Epoch ms of the first message, or null if unknown. */
   createdAt: number | null
   /** Epoch ms of the most recent message, or null if unknown. */
   lastActivity: number | null
-  /** Total number of transcript entries. */
+  /** Number of curated (displayable) messages. */
   messageCount: number
 }
 
 /** Role of a message rendered in the transcript view. */
-export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
+export type MessageRole = 'user' | 'assistant' | 'system'
 
-/** A single transcript entry flattened for display. */
+/** A renderable piece of a message. */
+export type MessagePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool'; name: string; detail: string }
+  | { kind: 'thinking'; text: string }
+
+/** A single transcript entry, curated and flattened for display. */
 export interface TranscriptMessage {
   /** Stable id (the source uuid when present, else a synthesized index). */
   id: string
   role: MessageRole
-  /** Plain-text content suitable for display. */
-  text: string
+  /** Renderable parts; never empty (noise-only messages are dropped upstream). */
+  parts: MessagePart[]
   /** Epoch ms timestamp, or null. */
   timestamp: number | null
 }
