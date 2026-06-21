@@ -41,7 +41,17 @@ export type MessageRole = 'user' | 'assistant' | 'system'
 /** A renderable piece of a message. */
 export type MessagePart =
   | { kind: 'text'; text: string }
-  | { kind: 'tool'; name: string; detail: string }
+  | {
+      kind: 'tool'
+      name: string
+      detail: string
+      /** Tool-use id, used to correlate the result fed back to the model. */
+      toolUseId?: string
+      /** The tool's output, attached once available (history view). */
+      result?: string
+      /** True when the tool reported an error. */
+      isError?: boolean
+    }
   | { kind: 'thinking'; text: string }
 
 /** A single transcript entry, curated and flattened for display. */

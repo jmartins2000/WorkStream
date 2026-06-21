@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collectToolResults,
   contentToParts,
   decodeProjectDir,
   entryToMessage,
@@ -185,6 +186,58 @@ describe('parseTranscript', () => {
     })
     expect(summary.title).toBe('Do the thing')
     expect(summary.cwd).toBe('/work/proj')
+  })
+})
+
+describe('tool results', () => {
+  const raw = [
+    JSON.stringify({
+      type: 'assistant',
+      uuid: 'a1',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: { command: 'ls' } }]
+      }
+    }),
+    JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: 'file1\nfile2' }]
+      }
+    })
+  ].join('\n')
+
+  it('collects tool results keyed by tool_use_id', () => {
+    const entries = raw.split('\n').map((l) => JSON.parse(l))
+    const map = collectToolResults(entries)
+    expect(map.get('tu_1')).toEqual({ text: 'file1\nfile2', isError: false })
+  })
+
+  it('attaches results to the matching tool chip', () => {
+    const messages = parseTranscript(raw)
+    // The tool-result user message is hidden; only the assistant message remains.
+    expect(messages).toHaveLength(1)
+    const toolPart = messages[0].parts.find((p) => p.kind === 'tool')
+    expect(toolPart).toMatchObject({ name: 'Bash', toolUseId: 'tu_1', result: 'file1\nfile2' })
+  })
+
+  it('flags error results', () => {
+    const errRaw = [
+      JSON.stringify({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'tool_use', id: 't2', name: 'Bash' }] }
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 't2', content: 'boom', is_error: true }]
+        }
+      })
+    ].join('\n')
+    const part = parseTranscript(errRaw)[0].parts.find((p) => p.kind === 'tool')
+    expect(part).toMatchObject({ isError: true, result: 'boom' })
   })
 })
 

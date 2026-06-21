@@ -504,6 +504,42 @@ body {
   padding: 6px 10px;
   width: fit-content;
   max-width: 100%;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tool-chip--clickable {
+  cursor: pointer;
+}
+
+.tool-chip--clickable:hover {
+  border-color: var(--accent);
+}
+
+.tool-chip__caret {
+  color: var(--text-dim);
+}
+
+.tool-chip__error {
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.tool-output {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
 }
 
 .tool-chip__name {

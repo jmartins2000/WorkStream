@@ -10,7 +10,7 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ✅ Tool calls shown as compact chips
 - ✅ Thinking blocks (collapsible)
 - ✅ Noise curation (task-notifications, command echoes, caveats hidden)
-- 🟡 Tool result / output display (currently hidden; planned: expandable)
+- 🟡 Tool result / output display (expandable in history; live runs pending)
 - ⬜ Diffs for Edit/Write (syntax-highlighted)
 - ⬜ Copy message / copy code block
 - ⬜ Image paste / attach (needs streaming-input mode)
