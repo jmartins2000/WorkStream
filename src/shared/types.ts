@@ -163,6 +163,10 @@ export interface ClaudeBridge {
   renameSession(sessionId: string, title: string, cwd: string): Promise<void>
   /** Permanently delete a session's transcript. */
   deleteSession(sessionId: string, cwd: string): Promise<void>
+  /** Fork a session at its current point (like /branch); returns new id. */
+  forkSession(sessionId: string, cwd: string): Promise<string>
+  /** Save transcript markdown to a file; returns the path or null if cancelled. */
+  exportTranscript(defaultName: string, content: string): Promise<string | null>
   startRun(options: StartRunOptions): Promise<StartRunResult>
   cancelRun(runId: string): Promise<void>
   /** Reply to a mid-run InputRequest (question answer or permission decision). */
@@ -177,6 +181,8 @@ export const IPC = {
   getMessages: 'claude:getMessages',
   renameSession: 'claude:renameSession',
   deleteSession: 'claude:deleteSession',
+  forkSession: 'claude:forkSession',
+  exportTranscript: 'claude:exportTranscript',
   startRun: 'claude:startRun',
   cancelRun: 'claude:cancelRun',
   respondInput: 'claude:respondInput',

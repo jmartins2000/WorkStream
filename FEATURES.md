@@ -12,7 +12,7 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ✅ Noise curation (task-notifications, command echoes, caveats hidden)
 - 🟡 Tool result / output display (expandable in history; live runs pending)
 - ⬜ Diffs for Edit/Write (syntax-highlighted)
-- ⬜ Copy message / copy code block
+- ✅ Copy message to clipboard
 - ⬜ Image paste / attach (needs streaming-input mode)
 
 ## Sessions
@@ -20,8 +20,8 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ✅ Resume a session, real (/rename) titles, git branch
 - ✅ Rename session (`/rename`)
 - ✅ Delete session
-- 🟡 Fork / branch session (`/branch`, `forkSession`)
-- ⬜ Export transcript (`/export`)
+- ✅ Fork / branch session (`/branch`, `forkSession`)
+- ✅ Export transcript (`/export`) to markdown
 - ⬜ Search sessions / command history
 - ⬜ New-session naming
 
@@ -57,7 +57,7 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ⬜ Settings panel (`/config`: theme, defaults, output style)
 - ⬜ Permission rules editor (`/permissions`)
 - ⬜ Checkpoints / rewind (`/rewind`)
-- ⬜ Keyboard shortcuts (Esc interrupt, Shift+Tab cycle mode, etc.)
+- 🟡 Keyboard shortcuts (Esc interrupts a run; more planned)
 - 🚫 Terminal-only: fullscreen TUI, vim mode, status line, voice, IDE
   integrations, `/teleport`, `/desktop`, color/theme of the prompt bar
 

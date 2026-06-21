@@ -133,7 +133,9 @@ async function drive(
     permissionMode: settings?.permissionMode ?? DEFAULT_PERMISSION_MODE,
     allowedTools: AUTO_ALLOWED_TOOLS,
     canUseTool: makeCanUseTool(runId, emit, abort),
-    abortController: abort
+    abortController: abort,
+    // Surface CLI diagnostics in the dev terminal to aid debugging.
+    stderr: (data: string) => process.stderr.write(`[claude-cli] ${data}`)
   }
   if (options.resumeSessionId) queryOptions.resume = options.resumeSessionId
   // 'default' means "let the account/CLI pick" — leave the option unset.
@@ -197,6 +199,7 @@ async function drive(
     if (abort.signal.aborted) {
       emit({ type: 'completed', runId, sessionId, ok: false })
     } else {
+      console.error('[claudecode-stremio] run failed:', err)
       emit({ type: 'error', runId, message: errorMessage(err) })
       emit({ type: 'completed', runId, sessionId, ok: false })
     }

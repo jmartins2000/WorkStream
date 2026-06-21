@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { ClaudeCockpit } from './components/ClaudeCockpit'
 import { StremioPane, type StremioHandle } from './components/StremioPane'
 import { useClaudeRun } from './useClaudeRun'
@@ -23,6 +23,15 @@ export function App(): JSX.Element {
 
   const showClaude = useCallback(() => setView('claude'), [])
   const showStremio = useCallback(() => setView('stremio'), [])
+
+  // Esc interrupts a running Claude turn (like the CLI).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && run.status === 'running') run.cancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [run])
 
   const needsAttention =
     view !== 'claude' && (run.status === 'awaiting-input' || run.status === 'done' || run.status === 'error')
