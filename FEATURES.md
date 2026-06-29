@@ -33,10 +33,14 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ✅ Model selector (`/model`: default, opus, sonnet, haiku, fable, opusplan)
 - ✅ Effort / thinking level (`/effort`: low…max)
 - ✅ Permission mode selector (default, acceptEdits, plan, bypassPermissions)
-- ⬜ Mid-run model / mode switch (needs streaming-input mode)
+- ✅ Streaming-input session — the runner stays alive across turns/results
+- ✅ Background task auto-continue: Bash `run_in_background` keeps the session
+  open; the agent resumes and reports when it finishes, and pause-on-finish
+  re-fires (pulls you back from Stremio). Shows a "Background task running…" status.
+- ⬜ Mid-run model / mode switch (SDK `setModel`/`setPermissionMode` now reachable)
 - ⬜ Message queuing while running (streaming-input mode)
 - ⬜ Plan mode workflow (present plan → approve → execute)
-- ⬜ Background tasks panel (`/tasks`, Bash run_in_background)
+- ⬜ Background tasks panel (`/tasks`) — list/controls view; auto-continue already works
 
 ## Context & cost
 - ✅ Per-run cost + token usage (`/cost`, `/usage`) from the result message
@@ -62,7 +66,10 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
   integrations, `/teleport`, `/desktop`, color/theme of the prompt bar
 
 ## Notes
-- Several "advanced control" items (mid-run switches, queuing, images, plan
-  mode) all depend on migrating the runner to the SDK's **streaming-input
-  mode** (async-generator prompt). That's a planned dedicated wave.
+- The runner now uses the SDK's **streaming-input mode** (async-generator
+  prompt) and keeps one live session per conversation, which is what unlocked
+  background-task auto-continuation. The remaining "advanced control" items
+  (mid-run switches, queuing, images, plan mode) build on this same foundation —
+  the SDK control methods (`setModel`, `setPermissionMode`, `interrupt`,
+  priority queuing on input messages) are now reachable.
 - This file is the source of truth for parity progress — update it as items land.

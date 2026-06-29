@@ -49,7 +49,12 @@ export function App(): JSX.Element {
           {run.status === 'awaiting-input' && (
             <span className="status status--attention">◆ Claude needs you</span>
           )}
-          {run.status === 'done' && <span className="status status--done">✓ Claude finished</span>}
+          {run.status !== 'running' && run.backgroundActive && (
+            <span className="status status--running">● Background task running…</span>
+          )}
+          {run.status === 'done' && !run.backgroundActive && (
+            <span className="status status--done">✓ Claude finished</span>
+          )}
           {run.status === 'error' && <span className="status status--error">⚠ Claude stopped</span>}
         </div>
 

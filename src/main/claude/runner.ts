@@ -3,6 +3,14 @@
  * RunEvents. Because the SDK reads/writes the same session store as the CLI,
  * a run started here is visible from the terminal and vice-versa.
  *
+ * Each conversation is a single, long-lived **streaming-input** session: the
+ * prompt is an async stream we keep open, so the query stays alive past the
+ * first `result`. This is what lets the agent continue on its own when a
+ * background task (Bash `run_in_background` / Task) finishes — the SDK yields a
+ * `task_notification` and the agent wakes itself to report back, all through the
+ * same stream. One-shot mode (a string prompt) would tear the query down at the
+ * first `result`, stranding any background work.
+ *
  * Runs are interactive: tool permissions and AskUserQuestion prompts are
  * surfaced to the renderer via `needsInput` events and resolved when the user
  * replies through `resolveInput`.
@@ -14,7 +22,9 @@ import {
   type CanUseTool,
   type Options,
   type PermissionMode,
-  type PermissionResult
+  type PermissionResult,
+  type Query,
+  type SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk'
 import type { InputResponse, RunEvent, RunUsage, StartRunOptions } from '../../shared/types.js'
 import { contentToParts, toolDetail } from './transcript.js'
@@ -30,8 +40,18 @@ const AUTO_ALLOWED_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'To
 
 type Emit = (event: RunEvent) => void
 
+/** A manually-driven async stream of user turns that stays open for the session. */
+interface InputStream {
+  iterable: AsyncGenerator<SDKUserMessage>
+  push: (text: string) => void
+  close: () => void
+}
+
 interface ActiveRun {
   abort: AbortController
+  input: InputStream
+  /** The live Query handle, set once the query starts (for interrupt()). */
+  query?: Query
 }
 
 interface PendingInput {
@@ -41,18 +61,84 @@ interface PendingInput {
 const activeRuns = new Map<string, ActiveRun>()
 const pendingInputs = new Map<string, PendingInput>()
 
-/** Start a run and stream events through `emit`. Returns the new run id. */
+/** Build an async-iterable input the caller can push turns into and later close. */
+function makeInputStream(): InputStream {
+  let resolveNext: (() => void) | null = null
+  const buffer: SDKUserMessage[] = []
+  let done = false
+  const signal = (): void => {
+    const r = resolveNext
+    resolveNext = null
+    if (r) r()
+  }
+  async function* gen(): AsyncGenerator<SDKUserMessage> {
+    while (true) {
+      while (buffer.length) yield buffer.shift() as SDKUserMessage
+      if (done) return
+      await new Promise<void>((res) => {
+        resolveNext = res
+      })
+    }
+  }
+  return {
+    iterable: gen(),
+    push: (text: string) => {
+      buffer.push({
+        type: 'user',
+        message: { role: 'user', content: text },
+        parent_tool_use_id: null
+      })
+      signal()
+    },
+    close: () => {
+      done = true
+      signal()
+    }
+  }
+}
+
+/** Start a streaming session with an initial prompt. Returns the run id. */
 export function startRun(options: StartRunOptions, emit: Emit): string {
   const runId = randomUUID()
   const abort = new AbortController()
-  activeRuns.set(runId, { abort })
-  void drive(runId, options, emit, abort)
+  const input = makeInputStream()
+  const run: ActiveRun = { abort, input }
+  activeRuns.set(runId, run)
+  input.push(options.prompt)
+  void drive(runId, options, emit, run)
   return runId
 }
 
-/** Request cancellation of an in-flight run. No-op if already finished. */
+/** Push a follow-up turn into an already-live session. No-op if it's gone. */
+export function sendMessage(runId: string, prompt: string): void {
+  activeRuns.get(runId)?.input.push(prompt)
+}
+
+/**
+ * Interrupt the current turn while keeping the session alive (mirrors Esc in
+ * the CLI). The query yields a result for the interrupted turn and remains
+ * ready for the next push.
+ */
 export function cancelRun(runId: string): void {
-  activeRuns.get(runId)?.abort.abort()
+  const run = activeRuns.get(runId)
+  if (!run) return
+  if (run.query) {
+    void run.query.interrupt().catch(() => {
+      // Already settled or not in streaming mode; fall back to a hard stop.
+      run.abort.abort()
+    })
+  } else {
+    run.abort.abort()
+  }
+}
+
+/** Fully end a session: close the input stream and abort the query. */
+export function endRun(runId: string): void {
+  const run = activeRuns.get(runId)
+  if (!run) return
+  run.input.close()
+  run.abort.abort()
+  activeRuns.delete(runId)
 }
 
 /** Resolve a pending input request with the user's reply. */
@@ -122,8 +208,9 @@ async function drive(
   runId: string,
   options: StartRunOptions,
   emit: Emit,
-  abort: AbortController
+  run: ActiveRun
 ): Promise<void> {
+  const { abort } = run
   let sessionId: string | null = options.resumeSessionId ?? null
 
   const settings = options.settings
@@ -142,8 +229,13 @@ async function drive(
   if (settings?.model && settings.model !== 'default') queryOptions.model = settings.model
   if (settings?.effort) queryOptions.effort = settings.effort
 
+  // Slash commands arrive on every `init` (including background continuations);
+  // only surface them once per session.
+  let slashEmitted = false
+
   try {
-    const response = query({ prompt: options.prompt, options: queryOptions })
+    const response = query({ prompt: run.input.iterable, options: queryOptions })
+    run.query = response
 
     for await (const msg of response) {
       if ('session_id' in msg && typeof msg.session_id === 'string' && msg.session_id) {
@@ -154,9 +246,25 @@ async function drive(
         case 'system':
           if (msg.subtype === 'init') {
             emit({ type: 'started', runId, sessionId })
-            if (Array.isArray(msg.slash_commands)) {
+            if (!slashEmitted && Array.isArray(msg.slash_commands)) {
               emit({ type: 'slashCommands', runId, commands: msg.slash_commands })
+              slashEmitted = true
             }
+          } else if (msg.subtype === 'task_started') {
+            emit({
+              type: 'taskStarted',
+              runId,
+              taskId: msg.task_id,
+              description: msg.description
+            })
+          } else if (msg.subtype === 'task_notification') {
+            emit({
+              type: 'taskCompleted',
+              runId,
+              taskId: msg.task_id,
+              status: msg.status,
+              summary: msg.summary
+            })
           }
           break
 
@@ -187,6 +295,8 @@ async function drive(
         case 'result': {
           const usage = extractUsage(msg)
           if (usage) emit({ type: 'usage', runId, usage })
+          // A turn ended — but the session stays open for follow-ups and for the
+          // agent to auto-continue when a background task reports in.
           emit({ type: 'completed', runId, sessionId, ok: !msg.is_error })
           break
         }
@@ -195,13 +305,15 @@ async function drive(
           break
       }
     }
+    // The input stream was closed (or the query ended): the session is over.
+    emit({ type: 'closed', runId, sessionId })
   } catch (err) {
     if (abort.signal.aborted) {
-      emit({ type: 'completed', runId, sessionId, ok: false })
+      emit({ type: 'closed', runId, sessionId })
     } else {
       console.error('[claudecode-stremio] run failed:', err)
       emit({ type: 'error', runId, message: errorMessage(err) })
-      emit({ type: 'completed', runId, sessionId, ok: false })
+      emit({ type: 'closed', runId, sessionId })
     }
   } finally {
     activeRuns.delete(runId)
