@@ -15,7 +15,7 @@ import {
   listSessions,
   renameSession
 } from './claude/sessions.js'
-import { cancelRun, resolveInput, startRun } from './claude/runner.js'
+import { cancelRun, endRun, resolveInput, sendMessage, startRun } from './claude/runner.js'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.listProjects, () => listProjects())
@@ -63,8 +63,16 @@ export function registerIpcHandlers(): void {
     return { runId }
   })
 
+  ipcMain.handle(IPC.sendMessage, (_event, runId: string, prompt: string) => {
+    sendMessage(runId, prompt)
+  })
+
   ipcMain.handle(IPC.cancelRun, (_event, runId: string) => {
     cancelRun(runId)
+  })
+
+  ipcMain.handle(IPC.endRun, (_event, runId: string) => {
+    endRun(runId)
   })
 
   ipcMain.handle(IPC.respondInput, (_event, requestId: string, response: InputResponse) => {

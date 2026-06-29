@@ -98,13 +98,29 @@ export type RunEvent =
   | { type: 'needsInput'; runId: string; request: InputRequest }
   | { type: 'usage'; runId: string; usage: RunUsage }
   | { type: 'error'; runId: string; message: string }
+  /** A background task (Bash run_in_background / Task) started during the session. */
+  | { type: 'taskStarted'; runId: string; taskId: string; description: string }
+  /** A background task finished; the agent will auto-continue from here. */
+  | {
+      type: 'taskCompleted'
+      runId: string
+      taskId: string
+      status: 'completed' | 'failed' | 'stopped'
+      summary: string
+    }
   | {
       type: 'completed'
       runId: string
       sessionId: string | null
-      /** True when the run ended without an error. */
+      /** True when the turn ended without an error. */
       ok: boolean
     }
+  /**
+   * The streaming session itself ended (input closed, cancelled, or the query
+   * terminated). Distinct from `completed`, which only ends a single turn while
+   * the session stays alive to receive follow-ups and background continuations.
+   */
+  | { type: 'closed'; runId: string; sessionId: string | null }
 
 /** Model aliases offered in the UI (maps to the SDK `model` option). */
 export const RUN_MODELS = ['default', 'opus', 'sonnet', 'haiku', 'fable', 'opusplan'] as const
@@ -168,7 +184,12 @@ export interface ClaudeBridge {
   /** Save transcript markdown to a file; returns the path or null if cancelled. */
   exportTranscript(defaultName: string, content: string): Promise<string | null>
   startRun(options: StartRunOptions): Promise<StartRunResult>
+  /** Send a follow-up turn into an already-live streaming session. */
+  sendMessage(runId: string, prompt: string): Promise<void>
+  /** Interrupt the current turn without ending the session. */
   cancelRun(runId: string): Promise<void>
+  /** Fully end a streaming session (tear down the query). */
+  endRun(runId: string): Promise<void>
   /** Reply to a mid-run InputRequest (question answer or permission decision). */
   respondInput(requestId: string, response: InputResponse): Promise<void>
   /** Subscribe to streaming run events. Returns an unsubscribe function. */
@@ -184,7 +205,9 @@ export const IPC = {
   forkSession: 'claude:forkSession',
   exportTranscript: 'claude:exportTranscript',
   startRun: 'claude:startRun',
+  sendMessage: 'claude:sendMessage',
   cancelRun: 'claude:cancelRun',
+  endRun: 'claude:endRun',
   respondInput: 'claude:respondInput',
   runEvent: 'claude:runEvent'
 } as const

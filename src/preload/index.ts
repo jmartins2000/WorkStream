@@ -32,7 +32,10 @@ const api: ClaudeBridge = {
     ipcRenderer.invoke(IPC.exportTranscript, defaultName, content) as Promise<string | null>,
   startRun: (options: StartRunOptions) =>
     ipcRenderer.invoke(IPC.startRun, options) as Promise<StartRunResult>,
+  sendMessage: (runId: string, prompt: string) =>
+    ipcRenderer.invoke(IPC.sendMessage, runId, prompt) as Promise<void>,
   cancelRun: (runId: string) => ipcRenderer.invoke(IPC.cancelRun, runId) as Promise<void>,
+  endRun: (runId: string) => ipcRenderer.invoke(IPC.endRun, runId) as Promise<void>,
   respondInput: (requestId: string, response: InputResponse) =>
     ipcRenderer.invoke(IPC.respondInput, requestId, response) as Promise<void>,
   onRunEvent: (listener: (event: RunEvent) => void) => {
