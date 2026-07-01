@@ -13,6 +13,7 @@ import {
   type SessionSummary,
   type StartRunOptions,
   type StartRunResult,
+  type StremioServerStatus,
   type TranscriptMessage
 } from '../shared/types.js'
 
@@ -42,6 +43,15 @@ const api: ClaudeBridge = {
     const handler = (_event: IpcRendererEvent, payload: RunEvent): void => listener(payload)
     ipcRenderer.on(IPC.runEvent, handler)
     return () => ipcRenderer.removeListener(IPC.runEvent, handler)
+  },
+  getStremioServerStatus: () =>
+    ipcRenderer.invoke(IPC.getStremioServerStatus) as Promise<StremioServerStatus>,
+  installRosetta: () => ipcRenderer.invoke(IPC.installRosetta) as Promise<void>,
+  onStremioServerStatus: (listener: (status: StremioServerStatus) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: StremioServerStatus): void =>
+      listener(payload)
+    ipcRenderer.on(IPC.stremioServerStatus, handler)
+    return () => ipcRenderer.removeListener(IPC.stremioServerStatus, handler)
   }
 }
 
