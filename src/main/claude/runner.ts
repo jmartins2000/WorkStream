@@ -311,7 +311,7 @@ async function drive(
     if (abort.signal.aborted) {
       emit({ type: 'closed', runId, sessionId })
     } else {
-      console.error('[claudecode-stremio] run failed:', err)
+      console.error('[workstream] run failed:', err)
       emit({ type: 'error', runId, message: errorMessage(err) })
       emit({ type: 'closed', runId, sessionId })
     }

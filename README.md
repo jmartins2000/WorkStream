@@ -1,4 +1,4 @@
-# ClaudeCode · Stremio
+# WorkStream
 
 A macOS desktop app that runs **Claude Code** sessions in the background while
 you watch **Stremio** — then pauses your video and brings Claude forward the
