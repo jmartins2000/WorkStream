@@ -170,6 +170,19 @@ export interface StartRunResult {
   runId: string
 }
 
+/**
+ * State of the local Stremio streaming server (`stremio-runtime server.js` on
+ * 127.0.0.1:11470). web.stremio.com cannot resolve or play any stream without
+ * it — see claude/stremioServer.ts.
+ */
+export type StremioServerStatus =
+  | { state: 'starting' }
+  | { state: 'ready' }
+  | { state: 'missing-binaries' }
+  | { state: 'rosetta-required' }
+  | { state: 'installing-rosetta' }
+  | { state: 'error'; message: string }
+
 /** The API surface exposed to the renderer via contextBridge. */
 export interface ClaudeBridge {
   listProjects(): Promise<ProjectSummary[]>
@@ -194,6 +207,12 @@ export interface ClaudeBridge {
   respondInput(requestId: string, response: InputResponse): Promise<void>
   /** Subscribe to streaming run events. Returns an unsubscribe function. */
   onRunEvent(listener: (event: RunEvent) => void): () => void
+  /** Current state of the local Stremio streaming server. */
+  getStremioServerStatus(): Promise<StremioServerStatus>
+  /** Trigger the one-time Rosetta 2 install (Apple Silicon only; prompts for admin password). */
+  installRosetta(): Promise<void>
+  /** Subscribe to streaming-server status changes. Returns an unsubscribe function. */
+  onStremioServerStatus(listener: (status: StremioServerStatus) => void): () => void
 }
 
 export const IPC = {
@@ -209,5 +228,8 @@ export const IPC = {
   cancelRun: 'claude:cancelRun',
   endRun: 'claude:endRun',
   respondInput: 'claude:respondInput',
-  runEvent: 'claude:runEvent'
+  runEvent: 'claude:runEvent',
+  getStremioServerStatus: 'stremio:getServerStatus',
+  installRosetta: 'stremio:installRosetta',
+  stremioServerStatus: 'stremio:serverStatus'
 } as const

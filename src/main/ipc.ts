@@ -6,7 +6,13 @@
 
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { writeFile } from 'node:fs/promises'
-import { IPC, type InputResponse, type RunEvent, type StartRunOptions } from '../shared/types.js'
+import {
+  IPC,
+  type InputResponse,
+  type RunEvent,
+  type StartRunOptions,
+  type StremioServerStatus
+} from '../shared/types.js'
 import {
   deleteSession,
   forkSession,
@@ -16,6 +22,14 @@ import {
   renameSession
 } from './claude/sessions.js'
 import { cancelRun, endRun, resolveInput, sendMessage, startRun } from './claude/runner.js'
+import * as stremioServer from './stremio/server.js'
+
+/** Push a status update to every open window (there's only ever one). */
+export function broadcastStremioStatus(status: StremioServerStatus): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) window.webContents.send(IPC.stremioServerStatus, status)
+  }
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.listProjects, () => listProjects())
@@ -78,4 +92,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.respondInput, (_event, requestId: string, response: InputResponse) => {
     resolveInput(requestId, response)
   })
+
+  ipcMain.handle(IPC.getStremioServerStatus, () => stremioServer.getStatus())
+
+  ipcMain.handle(IPC.installRosetta, () => stremioServer.installRosetta(broadcastStremioStatus))
 }
