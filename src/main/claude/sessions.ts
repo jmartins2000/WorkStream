@@ -18,7 +18,7 @@ import {
   renameSession as sdkRenameSession
 } from '@anthropic-ai/claude-agent-sdk'
 import type { ProjectSummary, SessionSummary, TranscriptMessage } from '../../shared/types.js'
-import { decodeProjectDir, extractCwd, parseTranscript, summarizeSession } from './transcript.js'
+import { decodeProjectDir, parseTranscript, resolveCwd, summarizeSession } from './transcript.js'
 
 /** Title/branch metadata the SDK derives (including /rename custom titles). */
 interface SdkMeta {
@@ -101,13 +101,14 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     }
 
     // Decoding the folder name (dashes -> slashes) is lossy when the real path
-    // contains '-' or '.', producing a non-existent directory. The transcript
-    // records the true cwd, so read it from the newest session instead.
+    // contains '-' or '.', producing a non-existent directory. resolveCwd reads
+    // the true cwd from the newest session instead, preferring whichever
+    // recorded cwd actually matches this bucket (a session resumed from a
+    // different directory can record other, non-bucket-matching cwds too).
     let cwd = decodeProjectDir(dirName)
     if (newestFile) {
       try {
-        const realCwd = extractCwd(await readFile(join(dirPath, newestFile), 'utf8'))
-        if (realCwd) cwd = realCwd
+        cwd = resolveCwd(await readFile(join(dirPath, newestFile), 'utf8'), dirName, cwd)
       } catch {
         // fall back to the decoded path
       }
