@@ -1,5 +1,5 @@
 {
-  "name": "claudecode-stremio",
+  "name": "workstream",
   "version": "0.1.0",
   "description": "A macOS desktop app that runs Claude Code sessions in the background while you watch Stremio, then surfaces Claude Code the moment a session finishes.",
   "main": "./out/main/index.js",
@@ -16,10 +16,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx",
-    "package": "npm run build && electron-builder --mac"
+    "package": "npm run build && electron-builder --mac",
+    "fetch:stremio": "node scripts/fetch-stremio-service.mjs",
+    "postinstall": "node scripts/fetch-stremio-service.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.183",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/newsreader": "^5.2.10",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
