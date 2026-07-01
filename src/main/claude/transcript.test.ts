@@ -3,11 +3,13 @@ import {
   collectToolResults,
   contentToParts,
   decodeProjectDir,
+  encodeProjectDir,
   entryToMessage,
   extractCwd,
   isNoiseText,
   parseTimestamp,
   parseTranscript,
+  resolveCwd,
   summarizeSession,
   toolDetail,
   truncateTitle
@@ -19,6 +21,41 @@ describe('decodeProjectDir', () => {
   })
   it('handles an empty string', () => {
     expect(decodeProjectDir('')).toBe('')
+  })
+})
+
+describe('encodeProjectDir', () => {
+  it('mirrors decodeProjectDir for paths with no literal dashes/dots', () => {
+    expect(encodeProjectDir('/home/user/Proj')).toBe('-home-user-Proj')
+  })
+  it('round-trips through decodeProjectDir back to the same bucket name', () => {
+    const dirName = '-Users-joaomartins-Documents-Projetos-McKinsey-EDP'
+    expect(encodeProjectDir(decodeProjectDir(dirName))).toBe(dirName)
+  })
+})
+
+describe('resolveCwd', () => {
+  // A session resumed from a different directory than the one that created
+  // it: Claude Code keeps appending to the original file (under the original
+  // bucket) and just records the new cwd on later entries. The *first* cwd in
+  // the file ('/repo/sub/deep', from a later resume) is NOT the bucket this
+  // file is actually stored under ('-repo-mono-EDP'), but '/repo/mono-EDP' is.
+  const raw = [
+    JSON.stringify({ type: 'system', cwd: '/repo/sub/deep' }),
+    JSON.stringify({ type: 'user', cwd: '/repo/mono-EDP', message: { role: 'user', content: 'hi' } }),
+    JSON.stringify({ type: 'user', cwd: '/repo/mono-EDP/sub', message: { role: 'user', content: 'x' } })
+  ].join('\n')
+
+  it('prefers the cwd that re-encodes to the actual project bucket', () => {
+    expect(resolveCwd(raw, '-repo-mono-EDP', '/fallback')).toBe('/repo/mono-EDP')
+  })
+
+  it('falls back to the first cwd found when none match the bucket', () => {
+    expect(resolveCwd(raw, '-some-other-bucket', '/fallback')).toBe('/repo/sub/deep')
+  })
+
+  it('falls back to fallbackCwd when no cwd is recorded at all', () => {
+    expect(resolveCwd('{}', '-repo-mono-EDP', '/fallback')).toBe('/fallback')
   })
 })
 

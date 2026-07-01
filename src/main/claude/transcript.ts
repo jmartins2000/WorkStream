@@ -264,6 +264,48 @@ export function extractCwd(raw: string): string | null {
   return null
 }
 
+/** Mirror of Claude Code's own project-dir encoding: '/' and '.' become '-'. */
+export function encodeProjectDir(cwd: string): string {
+  return cwd.replace(/[/.]/g, '-')
+}
+
+/** Every distinct `cwd` recorded in a session's raw entries, in first-seen order. */
+function distinctCwds(raw: string): string[] {
+  const seen = new Set<string>()
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (isRecord(parsed) && typeof parsed.cwd === 'string' && parsed.cwd) seen.add(parsed.cwd)
+    } catch {
+      continue
+    }
+  }
+  return [...seen]
+}
+
+/**
+ * Resolve the cwd to pass back to the SDK (`resume`/`startRun`) for a session.
+ *
+ * A session can be *resumed* from a different directory than the one that
+ * created it — Claude Code keeps appending to the original file (under its
+ * original project-dir bucket) and just records the new cwd on the newer
+ * entries. So "the first cwd found in the file" (what `extractCwd` returns)
+ * can be a directory that has nothing to do with where the file is actually
+ * stored, which makes `resume` fail with "No conversation found" because the
+ * SDK re-encodes that cwd and looks in the wrong bucket.
+ *
+ * Prefer whichever recorded cwd re-encodes to the *actual* `projectDir` we
+ * read this file from — that's the one guaranteed to round-trip back to the
+ * right bucket. Falls back to the first cwd found, then `fallbackCwd`.
+ */
+export function resolveCwd(raw: string, projectDir: string, fallbackCwd: string): string {
+  const candidates = distinctCwds(raw)
+  const bucketMatch = candidates.find((cwd) => encodeProjectDir(cwd) === projectDir)
+  return bucketMatch ?? candidates[0] ?? fallbackCwd
+}
+
 /** First displayable text from a message's parts, for use as a title. */
 function firstText(message: TranscriptMessage | undefined): string {
   if (!message) return ''
@@ -293,7 +335,7 @@ export function summarizeSession(args: {
   return {
     sessionId,
     projectDir,
-    cwd: extractCwd(raw) ?? fallbackCwd,
+    cwd: resolveCwd(raw, projectDir, fallbackCwd),
     title: truncateTitle(title || firstText(firstUser) || '(no prompt)'),
     gitBranch,
     createdAt: timestamps.length ? Math.min(...timestamps) : null,
