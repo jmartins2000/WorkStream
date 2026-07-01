@@ -9,7 +9,7 @@ A macOS Electron app that runs **Claude Code** sessions in the background (via t
 ## Commands
 
 ```bash
-npm install            # uses legacy-peer-deps (see .npmrc)
+npm install            # uses legacy-peer-deps (see .npmrc); postinstall fetches the Stremio server binaries
 npm run dev            # electron-vite dev, hot reload — must run on a machine with a display
 npm run typecheck      # tsc for BOTH node and web configs (run after non-trivial changes)
 npm test               # vitest run (unit + filesystem integration)
@@ -17,6 +17,7 @@ npm run test:watch     # vitest watch
 npm run lint           # eslint . --ext .ts,.tsx
 npm run build          # typecheck + electron-vite build → ./out
 npm run package        # build + electron-builder --mac → ./release
+npm run fetch:stremio  # re-fetch resources/stremio-service/ (binaries; see below)
 ```
 
 Run a single test: `npx vitest run src/main/claude/transcript.test.ts` (or `-t "<name>"` for a single case).
@@ -59,6 +60,15 @@ Pure, unit-tested JSONL helpers. Parsing **drops noise** (task-notifications, co
 ### Renderer run lifecycle (`useClaudeRun.ts`)
 
 Owns one logical conversation (transcript, streaming, pending input, status). The `onAttention` callback fires whenever Claude needs the user (finished, error, or `needsInput`) — `App.tsx` wires it to pause the Stremio webview (`executeJavaScript` pausing every `<video>`) and switch to the cockpit. This is the whole "pause-on-finish" mechanism.
+
+### The local Stremio streaming server (`stremio/server.ts`) — key design point
+
+`web.stremio.com` (the embedded webview) is **not self-contained**: it has no torrent/transcoding engine of its own and depends entirely on a companion local server on `127.0.0.1:11470` (the same one Stremio's own desktop app bundles) for resolving and playing every stream. Without it, every title shows "No streams found" / "Video is not supported" — the webview's requests to `127.0.0.1:11470` just get refused.
+
+- **Binaries are fetched, not committed.** `scripts/fetch-stremio-service.mjs` downloads Stremio's official `stremio-service-macos.zip` release (GPLv2; safe to bundle as a subprocess — we don't link against it) and extracts `stremio-runtime` (a custom Node build), `ffmpeg`, `ffprobe`, and `server.js` into `resources/stremio-service/` (gitignored, ~150MB). Runs via `postinstall` and `npm run fetch:stremio`; `electron-builder.yml` bundles the folder as `extraResources` so packaged builds work offline.
+- **`server.js` is CommonJS** but has no `package.json` of its own — Node would otherwise walk up to *this* repo's `"type": "module"` and fail with `require is not defined`. The fetch script writes a `{"type": "commonjs"}` marker into `resources/stremio-service/` to pin it. Don't delete that file.
+- **Apple Silicon needs Rosetta 2** — the official binaries are x86_64-only. `server.ts` checks for `/Library/Apple/usr/share/rosetta/rosetta`; if missing, status goes to `'rosetta-required'` and the UI offers an install button (`installRosetta()`, a privileged `softwareupdate --install-rosetta` via `osascript`).
+- **Spawned once per app launch**, independent of which pane is visible (the webview is always mounted — see above), via `stremio-runtime server.js` with `FFMPEG_BIN`/`FFPROBE_BIN` env vars; killed on `before-quit`. Status (`starting` / `ready` / `missing-binaries` / `rosetta-required` / `installing-rosetta` / `error`) is broadcast over `IPC.stremioServerStatus` to every window; `StremioPane.tsx` overlays the webview until `ready`.
 
 ## Conventions
 

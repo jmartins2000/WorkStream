@@ -1,0 +1,31 @@
+<svg width="100%" height="100%" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Subtle top-to-bottom shading, macOS Big Sur-style — a whisper of
+         depth, not a heavy 3D bevel. -->
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDFBF7"/>
+      <stop offset="1" stop-color="#EFEADD"/>
+    </linearGradient>
+    <linearGradient id="diamondGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E5926E"/>
+      <stop offset="1" stop-color="#C4623F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- claude-white canvas (macOS-style rounded squircle) -->
+  <!-- Apple's icon template insets the visible shape to ~80% of the 1024
+       canvas (100px padding each side) so icons of different shapes still
+       read as the same size next to each other in the Dock. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bgGradient)"/>
+
+  <!-- claude-orange diamond (rotated square), rounded corners -->
+  <rect x="239" y="239" width="546" height="546" rx="76"
+        fill="url(#diamondGradient)"
+        transform="rotate(45 512 512)"/>
+
+  <!-- claude-white play triangle, optically centered (nudged right); kept
+       flat so it reads cleanly against the shaded diamond. -->
+  <path d="M 458 373 L 458 651 L 679 512 Z"
+        fill="#FAF8F4"
+        stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
