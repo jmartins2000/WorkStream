@@ -580,6 +580,15 @@ body {
 }
 
 /* ---- Transcript ---- */
+.transcript__more {
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
+  padding: 4px 0 8px;
+  margin: 0;
+  width: 100%;
+}
+
 .transcript {
   flex: 1;
   overflow-y: auto;

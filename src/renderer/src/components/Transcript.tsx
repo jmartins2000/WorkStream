@@ -14,6 +14,12 @@ const ROLE_LABEL: Record<TranscriptMessage['role'], string> = {
   system: 'System'
 }
 
+/**
+ * How many messages to render initially and to load per scroll-to-top.
+ * Keeps the DOM small for long sessions while making history accessible.
+ */
+const PAGE_SIZE = 20
+
 /** Plain-text rendering of a message's parts, for copy-to-clipboard. */
 function messageToText(message: TranscriptMessage): string {
   return message.parts
@@ -93,29 +99,81 @@ function Part({ part }: { part: MessagePart }): JSX.Element | null {
   }
 }
 
-/** Scrolling list of curated conversation messages plus the live stream. */
+/**
+ * Scrolling list of curated conversation messages plus the live stream.
+ *
+ * Only the most recent PAGE_SIZE messages are rendered initially. Scrolling
+ * to the top loads the previous page, with scroll-position restoration so
+ * the viewport doesn't jump.
+ */
 export function Transcript({ messages, streamingText, running }: TranscriptProps): JSX.Element {
-  const endRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const endRef = useRef<HTMLDivElement>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
+  // Refs used for scroll-position restoration when prepending history.
+  // Using refs (not state) avoids an extra render cycle.
+  const prevScrollHeightRef = useRef(0)
+  const loadingMoreRef = useRef(false)
+
+  const hasMore = visibleCount < messages.length
+  const visibleMessages = messages.slice(-visibleCount)
+
+  // Reset windowing whenever the session changes (different first message id).
+  const firstMsgId = messages[0]?.id
   useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+    loadingMoreRef.current = false
+  }, [firstMsgId])
+
+  // Auto-scroll to the bottom when new messages arrive or streaming progresses,
+  // unless we're in the middle of loading older history from the top.
+  useEffect(() => {
+    if (loadingMoreRef.current) return
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingText])
+
+  // After a page of older messages is prepended: restore scroll position so
+  // the user's viewport stays on the same message, not the new top.
+  useEffect(() => {
+    if (!loadingMoreRef.current) return
+    const el = scrollRef.current
+    if (el && prevScrollHeightRef.current > 0) {
+      el.scrollTop = el.scrollHeight - prevScrollHeightRef.current
+    }
+    prevScrollHeightRef.current = 0
+    loadingMoreRef.current = false
+  }, [visibleCount])
+
+  const handleScroll = (): void => {
+    const el = scrollRef.current
+    if (!el || !hasMore || loadingMoreRef.current) return
+    if (el.scrollTop < 80) {
+      loadingMoreRef.current = true
+      prevScrollHeightRef.current = el.scrollHeight
+      setVisibleCount((c) => Math.min(c + PAGE_SIZE, messages.length))
+    }
+  }
 
   if (messages.length === 0 && !streamingText && !running) {
     return (
       <div className="transcript transcript--empty">
         <p>Pick a session or start a new one, then send a prompt.</p>
         <p className="hint">
-          Claude works in the background while you watch Stremio. When it finishes, playback
-          pauses and this view comes forward.
+          Claude works in the background while you watch. When it finishes, playback pauses and
+          this view comes forward.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="transcript">
-      {messages.map((message) => (
+    <div className="transcript" ref={scrollRef} onScroll={handleScroll}>
+      {hasMore && (
+        <p className="transcript__more">↑ {messages.length - visibleCount} older messages</p>
+      )}
+
+      {visibleMessages.map((message) => (
         <article key={message.id} className={`message message--${message.role}`}>
           <header className="message__role">
             {ROLE_LABEL[message.role]}
