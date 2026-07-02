@@ -1,90 +1,90 @@
-# WorkStream
+<div align="center">
+  <img src="build/icon.png" width="120" alt="WorkStream" />
+  <h1>WorkStream</h1>
+  <p><strong>Let Claude Code work while you actually enjoy the wait.</strong></p>
+  <p>
+    Fire off a task &rarr; flip to Stremio, YouTube, or the browser &rarr; get pulled back the moment Claude is done.
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/platform-macOS-lightgray" alt="macOS" />
+    <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen" alt="Node.js 22+" />
+    <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT" />
+  </p>
+</div>
 
-A macOS desktop app that runs **Claude Code** sessions in the background while
-you watch **Stremio** — then pauses your video and brings Claude forward the
-moment a session finishes.
+---
 
-The idea: fire off a Claude Code task, flip over to Stremio and watch something,
-and the app taps you on the shoulder (pauses playback, surfaces the cockpit)
-when Claude is done and waiting on you.
+## Why this exists
+
+Claude Code tasks take time. A refactor, a test suite, a multi-step research run — you kick it off and then just sit there, switching tabs, watching tokens stream by, waiting.
+
+WorkStream changes that flow. It runs Claude Code sessions in the background, lets you flip over to watch something, and automatically pauses playback and surfaces the cockpit the moment Claude finishes — or needs a decision from you.
+
+You stay in the loop. You just stop wasting the idle time.
+
+## Features
+
+- **Claude cockpit** — start runs, browse past sessions, stream output live, answer questions and approve tool calls without leaving the app
+- **Stremio** — full embedded Stremio, with its local streaming server bundled so content actually plays
+- **YouTube** — YouTube embedded as a persistent tab; playback state survives switching back to Claude
+- **Browser** — a minimal in-app browser for anything else, with address bar and navigation
+- **Pause on finish** — when Claude needs you, playback pauses across all tabs and you're brought forward automatically
+- **Shared sessions** — reads and writes the same `~/.claude` store as the Claude Code CLI; sessions you start here resume in the terminal, and vice versa
+- **Background tasks** — when Claude spawns a background command, the session stays alive and the agent auto-continues when it reports back
 
 ## How it works
 
 ```
-┌─────────────────────────────────────────────┐
-│  Electron app (one window)                    │
-│                                               │
-│  Renderer (React) ── tabs ──┐                 │
-│   • Claude cockpit          │                 │
-│   • Stremio <webview>       │                 │
-│             ↕ IPC (preload bridge)            │
-│  Main process (Node)                          │
-│   • Claude Agent SDK  → runs / streams        │
-│   • reads ~/.claude/projects (shared store)   │
-└───────────────────────────────────────────────┘
+  You                   WorkStream              Claude
+   │                        │                     │
+   ├─ start a task ────────►│                     │
+   │                        ├─ run in background ►│
+   ├─ flip to Stremio ─────►│                     │
+   │                        │           working...│
+   │                        │◄── done ────────────┤
+   │◄─ playback pauses ─────┤                     │
+   │◄─ cockpit opens ───────┤                     │
+   ├─ review + reply ──────►│                     │
+   ├─ flip back to Stremio ►│                     │
 ```
 
-- **Shared sessions.** The app reads and writes the *same* session store the
-  Claude Code CLI uses (`~/.claude/projects/<project>/<id>.jsonl`, or
-  `$CLAUDE_CONFIG_DIR`). A session you started in the terminal shows up here,
-  and runs you start here are resumable from the terminal.
-- **Background runs.** Prompts run via the
-  [`@anthropic-ai/claude-agent-sdk`](https://code.claude.com/docs/en/agent-sdk)
-  in the main process, streaming tokens into the cockpit. Because you're away
-  watching, runs use `bypassPermissions` so they don't stall on prompts.
-- **Stremio.** The hosted Stremio web app (`web.stremio.com`) is embedded in an
-  Electron `<webview>`, so you get the full, maintenance-free Stremio.
-- **Pause-on-finish.** When a run completes, the app pauses any playing
-  `<video>` in the Stremio webview and switches to the Claude tab.
+## Prerequisites
+
+- **macOS** (Apple Silicon or Intel; Stremio streaming requires Rosetta 2 on Apple Silicon)
+- **Node.js 22+**
+- A working **Claude Code** login — the app reuses your existing `~/.claude` credentials
+
+## Install
+
+Download the latest `.dmg` from the [Releases page](https://github.com/jmartins2000/WorkStream/releases), open it, and drag WorkStream to your Applications folder.
+
+## Build from source
+
+```bash
+git clone https://github.com/jmartins2000/WorkStream.git
+cd WorkStream
+npm install        # also fetches the Stremio streaming server binaries
+npm run dev        # hot-reload dev build (requires a display)
+```
+
+```bash
+npm run typecheck  # tsc for both Node and renderer configs
+npm test           # vitest unit + integration tests
+npm run lint       # eslint
+npm run build      # production build → ./out
+npm run package    # electron-builder → ./release (.dmg + .zip)
+```
 
 ## Project layout
 
 | Path | What |
 |------|------|
-| `src/main/` | Electron main process: window, IPC, Claude integration |
-| `src/main/claude/transcript.ts` | Pure JSONL parsing helpers (unit-tested) |
-| `src/main/claude/sessions.ts` | Reads the `~/.claude` session store |
-| `src/main/claude/runner.ts` | Runs/streams Claude via the Agent SDK |
+| `src/main/claude/` | Agent SDK integration: runner, session store, transcript parser |
+| `src/main/stremio/` | Local Stremio streaming server lifecycle |
 | `src/preload/` | `contextBridge` exposing a typed `window.claude` API |
-| `src/renderer/` | React UI (cockpit, Stremio pane, transcript, composer) |
-| `src/shared/types.ts` | Types + IPC channel names shared across processes |
+| `src/renderer/` | React UI — Claude cockpit, Stremio / YouTube / Browser panes |
+| `src/shared/types.ts` | Types and IPC channel names shared across all three processes |
 
-## Prerequisites
+## License
 
-- **Node.js 22+** (npm ships with it — nothing else to install)
-- A working **Claude Code** login (the app reuses your existing `~/.claude`
-  credentials and sessions).
-
-## Develop
-
-```bash
-npm install
-npm run dev     # launches the app with hot reload
-```
-
-> Note: this is a desktop GUI app, so it must be run on a machine with a
-> display (your Mac). It will not render in a headless environment.
-
-## Quality gates
-
-```bash
-npm run typecheck  # tsc for both Node and web configs
-npm test           # vitest unit + filesystem integration tests
-npm run lint       # eslint
-npm run build      # production build into ./out
-```
-
-## Package a macOS app
-
-```bash
-npm run package    # electron-builder → ./release (.dmg + .zip)
-```
-
-Code signing / notarization are configured at release time.
-
-## Status
-
-Early MVP. Working: shared-session browsing, resuming/starting runs with live
-streaming, the Stremio pane, and pause-on-finish. Not yet done: completion
-notifications outside the window, multiple concurrent runs, and a self-hosted
-(forkable) Stremio build option.
+MIT

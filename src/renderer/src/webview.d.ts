@@ -9,6 +9,12 @@ export interface WebviewElement extends HTMLElement {
   executeJavaScript(code: string): Promise<unknown>
   reload(): void
   getURL(): string
+  // Browser navigation (used by BrowserPane)
+  loadURL(url: string): Promise<void>
+  goBack(): void
+  goForward(): void
+  canGoBack(): boolean
+  canGoForward(): boolean
 }
 
 type WebviewProps = DetailedHTMLProps<HTMLAttributes<WebviewElement>, WebviewElement> & {

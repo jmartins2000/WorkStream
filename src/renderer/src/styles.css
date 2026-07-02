@@ -233,9 +233,17 @@ body {
   inset: 0;
 }
 
-.pane--stremio {
+/* Media panes (Stremio, YouTube, Browser): always mounted, only front one visible. */
+.pane--media {
   z-index: 1;
   background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pane--media.pane--front {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .pane--claude {
@@ -250,21 +258,80 @@ body {
   pointer-events: auto;
 }
 
-.stremio-webview {
+.media-webview {
   width: 100%;
   height: 100%;
   border: none;
   display: inline-flex;
 }
 
-.stremio-pane {
+.media-pane {
   position: relative;
   width: 100%;
   height: 100%;
 }
 
-/* Covers the webview until the local streaming server is ready; a fixed warm
-   scrim regardless of app theme since it sits over Stremio's own dark UI. */
+/* Browser pane: stacks nav bar above the webview */
+.browser-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.browser-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.nav-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-btn:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+
+.browser-url {
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.browser-url:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.browser-pane .media-webview {
+  flex: 1;
+  height: auto;
+}
+
+/* Covers the Stremio webview until the local streaming server is ready. */
 .stremio-overlay {
   position: absolute;
   inset: 0;

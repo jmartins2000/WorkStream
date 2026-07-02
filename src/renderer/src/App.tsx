@@ -1,41 +1,56 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { BrowserPane } from './components/BrowserPane'
 import { ClaudeCockpit } from './components/ClaudeCockpit'
-import { StremioPane, type StremioHandle } from './components/StremioPane'
+import type { MediaHandle } from './components/StremioPane'
+import { StremioPane } from './components/StremioPane'
+import { YouTubePane } from './components/YouTubePane'
 import { useClaudeRun } from './useClaudeRun'
 import { useTheme } from './useTheme'
 
-type View = 'stremio' | 'claude'
+type View = 'claude' | 'stremio' | 'youtube' | 'browser'
+type MediaView = Exclude<View, 'claude'>
 
 export function App(): JSX.Element {
-  const stremioRef = useRef<StremioHandle>(null)
+  const stremioRef = useRef<MediaHandle>(null)
+  const youtubeRef = useRef<MediaHandle>(null)
+  const browserRef = useRef<MediaHandle>(null)
+
   const [view, setView] = useState<View>('claude')
+  // Remember which media tab the user was last on so hand-off returns them there.
+  const [lastMediaView, setLastMediaView] = useState<MediaView>('stremio')
   const { theme, toggle } = useTheme()
 
-  // Claude needs the user (finished, asking a question, or requesting
-  // permission): pause Stremio and bring the cockpit forward.
+  // Claude needs the user: pause all media and bring the cockpit forward.
   const handleAttention = useCallback(() => {
     stremioRef.current?.pause()
+    youtubeRef.current?.pause()
+    browserRef.current?.pause()
     setView('claude')
   }, [])
 
   const run = useClaudeRun(handleAttention)
 
-  // User handed control back to Claude (sent a prompt or answered one): go watch.
-  const handleHandOff = useCallback(() => setView('stremio'), [])
+  // User sent a prompt or answered Claude — go back to whatever they were watching.
+  const handleHandOff = useCallback(() => setView(lastMediaView), [lastMediaView])
 
   const showClaude = useCallback(() => setView('claude'), [])
 
-  // Stremio is "earned": you can only flip over to it while Claude is actually
-  // working — actively generating or with a background task still running.
-  const stremioAllowed = run.status === 'running' || run.backgroundActive
-  const showStremio = useCallback(() => {
-    if (stremioAllowed) setView('stremio')
-  }, [stremioAllowed])
+  // Media tabs are "earned": only accessible while Claude is actively working.
+  const mediaAllowed = run.status === 'running' || run.backgroundActive
 
-  // If Claude stops working while you're on Stremio, pull back to the cockpit.
+  const showMedia = useCallback(
+    (tab: MediaView) => {
+      if (!mediaAllowed) return
+      setView(tab)
+      setLastMediaView(tab)
+    },
+    [mediaAllowed]
+  )
+
+  // If Claude stops working while on a media tab, pull back to the cockpit.
   useEffect(() => {
-    if (view === 'stremio' && !stremioAllowed) setView('claude')
-  }, [view, stremioAllowed])
+    if (view !== 'claude' && !mediaAllowed) setView('claude')
+  }, [view, mediaAllowed])
 
   // Esc interrupts a running Claude turn (like the CLI).
   useEffect(() => {
@@ -47,7 +62,8 @@ export function App(): JSX.Element {
   }, [run])
 
   const needsAttention =
-    view !== 'claude' && (run.status === 'awaiting-input' || run.status === 'done' || run.status === 'error')
+    view !== 'claude' &&
+    (run.status === 'awaiting-input' || run.status === 'done' || run.status === 'error')
 
   return (
     <div className="app">
@@ -84,11 +100,29 @@ export function App(): JSX.Element {
             <button
               type="button"
               className={'tab' + (view === 'stremio' ? ' tab--active' : '')}
-              onClick={showStremio}
-              disabled={!stremioAllowed}
-              title={stremioAllowed ? 'Watch Stremio' : 'Available while Claude is working'}
+              onClick={() => showMedia('stremio')}
+              disabled={!mediaAllowed}
+              title={mediaAllowed ? 'Watch Stremio' : 'Available while Claude is working'}
             >
               Stremio
+            </button>
+            <button
+              type="button"
+              className={'tab' + (view === 'youtube' ? ' tab--active' : '')}
+              onClick={() => showMedia('youtube')}
+              disabled={!mediaAllowed}
+              title={mediaAllowed ? 'Watch YouTube' : 'Available while Claude is working'}
+            >
+              YouTube
+            </button>
+            <button
+              type="button"
+              className={'tab' + (view === 'browser' ? ' tab--active' : '')}
+              onClick={() => showMedia('browser')}
+              disabled={!mediaAllowed}
+              title={mediaAllowed ? 'Browse the web' : 'Available while Claude is working'}
+            >
+              Browser
             </button>
           </nav>
           <button
@@ -104,9 +138,15 @@ export function App(): JSX.Element {
       </header>
 
       <main className="stage">
-        {/* Stremio stays mounted underneath so playback/session state persist. */}
-        <div className={'pane pane--stremio' + (view === 'stremio' ? ' pane--front' : '')}>
+        {/* All panes stay mounted so playback/session state survive tab switches. */}
+        <div className={'pane pane--media' + (view === 'stremio' ? ' pane--front' : '')}>
           <StremioPane ref={stremioRef} />
+        </div>
+        <div className={'pane pane--media' + (view === 'youtube' ? ' pane--front' : '')}>
+          <YouTubePane ref={youtubeRef} />
+        </div>
+        <div className={'pane pane--media' + (view === 'browser' ? ' pane--front' : '')}>
+          <BrowserPane ref={browserRef} />
         </div>
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
           <ClaudeCockpit run={run} onHandOff={handleHandOff} />

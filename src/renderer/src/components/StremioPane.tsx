@@ -5,11 +5,9 @@ import { useStremioServer } from '../useStremioServer'
 /** The hosted Stremio web app. Embedding it gives full, maintenance-free Stremio. */
 const STREMIO_URL = 'https://web.stremio.com/'
 
-/** Imperative controls the app uses to pause playback when a run finishes. */
-export interface StremioHandle {
-  /** Pause every <video> currently playing inside Stremio. */
+/** Imperative controls the app uses to pause/resume playback in any media pane. */
+export interface MediaHandle {
   pause: () => void
-  /** Resume the most recently paused video. */
   play: () => void
   reload: () => void
 }
@@ -24,7 +22,7 @@ export interface StremioHandle {
  * webview until that server reports ready, instead of leaving the user
  * looking at a Stremio UI that will silently fail to play anything.
  */
-export const StremioPane = forwardRef<StremioHandle>(function StremioPane(_props, ref) {
+export const StremioPane = forwardRef<MediaHandle>(function StremioPane(_props, ref) {
   const webviewRef = useRef<WebviewElement | null>(null)
   const { status, installRosetta } = useStremioServer()
 
@@ -43,13 +41,13 @@ export const StremioPane = forwardRef<StremioHandle>(function StremioPane(_props
   }))
 
   return (
-    <div className="stremio-pane">
+    <div className="media-pane">
       <webview
         ref={webviewRef as never}
         src={STREMIO_URL}
         partition="persist:stremio"
         allowpopups
-        className="stremio-webview"
+        className="media-webview"
       />
       {status.state !== 'ready' && (
         <div className="stremio-overlay">
