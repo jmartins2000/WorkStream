@@ -19,7 +19,12 @@ export const YouTubePane = forwardRef<MediaHandle>(function YouTubePane(_props, 
         `(() => { const v = document.querySelector('video'); if (v) v.play(); })();`
       )
     },
-    reload: () => webviewRef.current?.reload()
+    reload: () => webviewRef.current?.reload(),
+    exitFullscreen: async () => {
+      await webviewRef.current?.executeJavaScript(
+        `document.fullscreenElement ? document.exitFullscreen() : undefined`
+      )
+    }
   }))
 
   return (

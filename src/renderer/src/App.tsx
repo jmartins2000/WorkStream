@@ -20,11 +20,22 @@ export function App(): JSX.Element {
   const [lastMediaView, setLastMediaView] = useState<MediaView>('stremio')
   const { theme, toggle } = useTheme()
 
-  // Claude needs the user: pause all media and bring the cockpit forward.
-  const handleAttention = useCallback(() => {
+  // Claude needs the user: pause all media, exit any fullscreen, then show the cockpit.
+  // exitFullscreen must be awaited — the fullscreen overlay covers the Claude pane
+  // until the browser tears it down, so we switch views only after it's gone.
+  const handleAttention = useCallback(async () => {
     stremioRef.current?.pause()
     youtubeRef.current?.pause()
     browserRef.current?.pause()
+    try {
+      await Promise.all([
+        stremioRef.current?.exitFullscreen() ?? Promise.resolve(),
+        youtubeRef.current?.exitFullscreen() ?? Promise.resolve(),
+        browserRef.current?.exitFullscreen() ?? Promise.resolve(),
+      ])
+    } catch {
+      // Don't let a fullscreen-exit failure block showing Claude.
+    }
     setView('claude')
   }, [])
 

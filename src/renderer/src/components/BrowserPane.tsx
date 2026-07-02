@@ -24,7 +24,12 @@ export const BrowserPane = forwardRef<MediaHandle>(function BrowserPane(_props, 
         `(() => { const v = document.querySelector('video, audio'); if (v) v.play(); })();`
       )
     },
-    reload: () => webviewRef.current?.reload()
+    reload: () => webviewRef.current?.reload(),
+    exitFullscreen: async () => {
+      await webviewRef.current?.executeJavaScript(
+        `document.fullscreenElement ? document.exitFullscreen() : undefined`
+      )
+    }
   }))
 
   // Keep the URL bar in sync with the page as the user navigates.

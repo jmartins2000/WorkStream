@@ -10,6 +10,12 @@ export interface MediaHandle {
   pause: () => void
   play: () => void
   reload: () => void
+  /**
+   * Exit any active HTML fullscreen before handing control back to Claude.
+   * Must be awaited — the pane switch should happen only after the fullscreen
+   * layer has been torn down, otherwise it covers the Claude cockpit.
+   */
+  exitFullscreen: () => Promise<void>
 }
 
 /**
@@ -37,7 +43,14 @@ export const StremioPane = forwardRef<MediaHandle>(function StremioPane(_props, 
         `(() => { const v = document.querySelector('video'); if (v) v.play(); })();`
       )
     },
-    reload: () => webviewRef.current?.reload()
+    reload: () => webviewRef.current?.reload(),
+    exitFullscreen: async () => {
+      // If the page has an active fullscreen element, exit it and wait for the
+      // transition to complete so the overlay is gone before we show Claude.
+      await webviewRef.current?.executeJavaScript(
+        `document.fullscreenElement ? document.exitFullscreen() : undefined`
+      )
+    }
   }))
 
   return (
