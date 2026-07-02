@@ -1,5 +1,6 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
 import type { ProjectSummary, SessionSummary } from '../../../shared/types'
+import type { BackgroundTask } from '../useClaudeRun'
 
 interface SessionSidebarProps {
   projects: ProjectSummary[]
@@ -7,6 +8,7 @@ interface SessionSidebarProps {
   selectedProject: ProjectSummary | null
   activeSessionId: string | null
   loading: boolean
+  backgroundTasks: BackgroundTask[]
   onSelectProject: (project: ProjectSummary) => void
   onSelectSession: (session: SessionSummary) => void
   onNewSession: () => void
@@ -14,6 +16,9 @@ interface SessionSidebarProps {
   onRenameSession: (session: SessionSummary) => void
   onDeleteSession: (session: SessionSummary) => void
   onForkSession: (session: SessionSummary) => void
+  onKillTask: (taskId: string) => void
+  onSnoozeTask: (taskId: string, durationMs: number) => void
+  onDismissTask: (taskId: string) => void
 }
 
 function basename(path: string): string {
@@ -31,6 +36,62 @@ function formatTime(ms: number | null): string {
   })
 }
 
+function formatElapsed(startedAt: number): string {
+  const ms = Date.now() - startedAt
+  const s = Math.floor(ms / 1000)
+  const m = Math.floor(s / 60)
+  const h = Math.floor(m / 60)
+  if (h > 0) return `${h}h ${m % 60}m`
+  if (m > 0) return `${m}m ${s % 60}s`
+  return `${s}s`
+}
+
+/** Inline snooze picker shown on a task row. */
+function TaskSnoozeMenu({
+  taskId,
+  onSnooze
+}: {
+  taskId: string
+  onSnooze: (taskId: string, ms: number) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const options = [
+    { label: '5 min', ms: 5 * 60 * 1000 },
+    { label: '15 min', ms: 15 * 60 * 1000 },
+    { label: '30 min', ms: 30 * 60 * 1000 },
+    { label: '1 hr', ms: 60 * 60 * 1000 }
+  ]
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="task-action-btn"
+        onClick={() => setOpen((v) => !v)}
+        title="Snooze alert"
+      >
+        Snooze
+      </button>
+      {open && (
+        <div className="task-snooze-menu">
+          {options.map((opt) => (
+            <button
+              key={opt.ms}
+              type="button"
+              className="task-snooze-menu__item"
+              onClick={() => {
+                onSnooze(taskId, opt.ms)
+                setOpen(false)
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Sidebar for browsing Claude Code projects and their sessions. */
 export function SessionSidebar({
   projects,
@@ -38,13 +99,17 @@ export function SessionSidebar({
   selectedProject,
   activeSessionId,
   loading,
+  backgroundTasks,
   onSelectProject,
   onSelectSession,
   onNewSession,
   onRefresh,
   onRenameSession,
   onDeleteSession,
-  onForkSession
+  onForkSession,
+  onKillTask,
+  onSnoozeTask,
+  onDismissTask
 }: SessionSidebarProps): JSX.Element {
   return (
     <aside className="sidebar">
@@ -134,6 +199,49 @@ export function SessionSidebar({
           ))}
         </ul>
       </div>
+
+      {backgroundTasks.length > 0 && (
+        <div className="sidebar__section">
+          <div className="sidebar__header">
+            <span>Running Tasks</span>
+            <span className="task-count-badge">{backgroundTasks.length}</span>
+          </div>
+          <ul className="task-list">
+            {backgroundTasks.map((task) => (
+              <li key={task.taskId} className={'task-card task-card--' + task.kind}>
+                <div className="task-card__top">
+                  <span className={'task-badge task-badge--' + task.kind}>
+                    {task.kind === 'process' ? 'Process' : 'Agent'}
+                  </span>
+                  <span className="task-card__elapsed">{formatElapsed(task.startedAt)}</span>
+                </div>
+                <p className="task-card__desc" title={task.description}>
+                  {task.description}
+                </p>
+                <div className="task-card__actions">
+                  <button
+                    type="button"
+                    className="task-action-btn task-action-btn--danger"
+                    onClick={() => onKillTask(task.taskId)}
+                    title="Kill task and interrupt Claude"
+                  >
+                    Kill
+                  </button>
+                  <TaskSnoozeMenu taskId={task.taskId} onSnooze={onSnoozeTask} />
+                  <button
+                    type="button"
+                    className="task-action-btn"
+                    onClick={() => onDismissTask(task.taskId)}
+                    title="Stop watchdog alerts for this task"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </aside>
   )
 }

@@ -1070,6 +1070,339 @@ body {
   color: var(--text-dim);
 }
 
+/* ---- Running Tasks (sidebar section) ---- */
+.task-count-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.6;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-left-width: 2px;
+}
+
+.task-card--process {
+  border-left-color: var(--warn);
+}
+
+.task-card--agent {
+  border-left-color: var(--ok);
+}
+
+.task-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+
+.task-badge--process {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+}
+
+.task-badge--agent {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+.task-card__elapsed {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.task-card--agent .task-card__elapsed {
+  color: var(--ok);
+}
+
+.task-card__desc {
+  margin: 0;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-card__actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.task-action-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  text-align: center;
+}
+
+.task-action-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.task-action-btn--danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.task-action-btn--danger:hover {
+  background: var(--danger-tint);
+  border-color: var(--danger);
+}
+
+/* Snooze dropdown */
+.task-snooze-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 80px;
+}
+
+.task-snooze-menu__item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--sans);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.task-snooze-menu__item:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ---- Watchdog Alert Modal ---- */
+.watchdog-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(27, 26, 23, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.watchdog-dialog {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 480px;
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.watchdog-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.watchdog-dialog__icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.watchdog-dialog__title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.watchdog-dialog__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.watchdog-task-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left-width: 3px;
+}
+
+.watchdog-task-card--process {
+  border-left-color: var(--warn);
+}
+
+.watchdog-task-card--agent {
+  border-left-color: var(--ok);
+}
+
+.watchdog-task-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.watchdog-task-card__elapsed {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--warn);
+}
+
+.watchdog-task-card--agent .watchdog-task-card__elapsed {
+  color: var(--ok);
+}
+
+.watchdog-task-card__desc {
+  margin: 0;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+  word-break: break-all;
+}
+
+.watchdog-snooze {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.watchdog-snooze__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+.watchdog-snooze__options {
+  display: flex;
+  gap: 8px;
+}
+
+.watchdog-snooze__btn {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+}
+
+.watchdog-snooze__btn:hover {
+  border-color: var(--accent);
+}
+
+.watchdog-snooze__btn--selected {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.watchdog-dialog__divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0 -4px;
+}
+
+.watchdog-dialog__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.watchdog-dialog__actions .btn {
+  flex: 1;
+}
+
+.watchdog-dialog__fine-print {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* ---- Buttons ---- */
 .btn {
   border: none;
@@ -1097,6 +1430,12 @@ body {
 .btn--danger {
   background: var(--danger);
   color: var(--on-accent);
+}
+
+.btn--danger-outline {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  color: var(--danger);
 }
 
 .btn--ghost {

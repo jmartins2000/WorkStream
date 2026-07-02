@@ -6,12 +6,14 @@ import {
   type TranscriptMessage
 } from '../../../shared/types'
 import type { UseClaudeRun } from '../useClaudeRun'
+import { useTaskWatchdog } from '../useTaskWatchdog'
 import { useSessions } from '../useSessions'
 import { SessionSidebar } from './SessionSidebar'
 import { Transcript } from './Transcript'
 import { Composer } from './Composer'
 import { InputPanel } from './InputPanel'
 import { RunSettingsBar } from './RunSettings'
+import { WatchdogAlert } from './WatchdogAlert'
 
 const ROLE_LABEL: Record<TranscriptMessage['role'], string> = {
   user: 'You',
@@ -48,6 +50,7 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
   const sessions = useSessions()
   const [cwd, setCwd] = useState<string>('')
   const [settings, setSettings] = useState<RunSettings>(DEFAULT_RUN_SETTINGS)
+  const alertingTask = useTaskWatchdog(run.backgroundTasks)
 
   // Default the working directory to the selected project's path.
   useEffect(() => {
@@ -112,12 +115,21 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
 
   return (
     <div className="cockpit">
+      {alertingTask && (
+        <WatchdogAlert
+          task={alertingTask}
+          onKill={() => run.killTask(alertingTask.taskId)}
+          onSnooze={(ms) => run.snoozeTask(alertingTask.taskId, ms)}
+          onDismiss={() => run.dismissTask(alertingTask.taskId)}
+        />
+      )}
       <SessionSidebar
         projects={sessions.projects}
         sessions={sessions.sessions}
         selectedProject={sessions.selectedProject}
         activeSessionId={run.sessionId}
         loading={sessions.loading}
+        backgroundTasks={run.backgroundTasks}
         onSelectProject={sessions.selectProject}
         onSelectSession={(session) => void handleSelectSession(session)}
         onNewSession={handleNewSession}
@@ -125,6 +137,9 @@ export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Eleme
         onRenameSession={(session) => void handleRename(session)}
         onDeleteSession={(session) => void handleDelete(session)}
         onForkSession={(session) => void handleFork(session)}
+        onKillTask={run.killTask}
+        onSnoozeTask={run.snoozeTask}
+        onDismissTask={run.dismissTask}
       />
 
       <section className="cockpit__main">

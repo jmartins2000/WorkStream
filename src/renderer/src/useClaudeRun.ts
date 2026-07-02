@@ -10,6 +10,20 @@ import type {
 
 export type RunStatus = 'idle' | 'running' | 'awaiting-input' | 'done' | 'error'
 
+/** A background task (Bash run_in_background or SDK sub-agent) tracked for the watchdog. */
+export interface BackgroundTask {
+  taskId: string
+  description: string
+  /** 'process' for shell commands, 'agent' for sub-agents (heuristic). */
+  kind: 'process' | 'agent'
+  /** Epoch ms when the taskStarted event arrived. */
+  startedAt: number
+  /** When true the watchdog will never fire for this task again. */
+  dismissedWatchdog: boolean
+  /** Epoch ms until which watchdog alerts are snoozed, or null. */
+  snoozedUntil: number | null
+}
+
 export interface UseClaudeRun {
   status: RunStatus
   messages: TranscriptMessage[]
@@ -20,8 +34,10 @@ export interface UseClaudeRun {
   commands: string[]
   /** A pending question/permission Claude is waiting on, if any. */
   pendingRequest: InputRequest | null
-  /** True while a background task is running and a continuation is expected. */
+  /** True while any background task is still running. */
   backgroundActive: boolean
+  /** All currently tracked background tasks for this session. */
+  backgroundTasks: BackgroundTask[]
   /** Cost/token usage from the most recent completed run, if any. */
   usage: RunUsage | null
   setMessages: (messages: TranscriptMessage[], sessionId: string | null) => void
@@ -29,6 +45,19 @@ export interface UseClaudeRun {
   cancel: () => void
   /** Reply to the pending input request. */
   respond: (response: InputResponse) => void
+  /** Remove a task from monitoring and interrupt Claude's current turn. */
+  killTask: (taskId: string) => void
+  /** Snooze watchdog alerts for a task until now + durationMs. */
+  snoozeTask: (taskId: string, durationMs: number) => void
+  /** Stop watchdog alerts for a task permanently (task stays tracked). */
+  dismissTask: (taskId: string) => void
+}
+
+/** Heuristic: does the description look like a shell command? */
+const SHELL_CMD_RE = /^(npm|npx|node|python3?|ruby|cargo|go |make|bash|sh |curl|wget|cd |ls |git |grep|find|cat |echo|mkdir|cp |mv |rm |touch|chmod|docker|kubectl|yarn|pnpm)/i
+
+function inferTaskKind(description: string): 'process' | 'agent' {
+  return SHELL_CMD_RE.test(description.trim()) ? 'process' : 'agent'
 }
 
 /**
@@ -45,8 +74,11 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
   const [error, setError] = useState<string | null>(null)
   const [commands, setCommands] = useState<string[]>([])
   const [pendingRequest, setPendingRequest] = useState<InputRequest | null>(null)
-  const [backgroundActive, setBackgroundActive] = useState(false)
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([])
   const [usage, setUsage] = useState<RunUsage | null>(null)
+
+  // Derived: any task still running
+  const backgroundActive = backgroundTasks.length > 0
 
   const activeRunId = useRef<string | null>(null)
   const onAttentionRef = useRef(onAttention)
@@ -91,11 +123,21 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
           break
 
         case 'taskStarted':
-          setBackgroundActive(true)
+          setBackgroundTasks((prev) => [
+            ...prev,
+            {
+              taskId: event.taskId,
+              description: event.description,
+              kind: inferTaskKind(event.description),
+              startedAt: Date.now(),
+              dismissedWatchdog: false,
+              snoozedUntil: null
+            }
+          ])
           break
 
         case 'taskCompleted':
-          setBackgroundActive(false)
+          setBackgroundTasks((prev) => prev.filter((t) => t.taskId !== event.taskId))
           break
 
         case 'error':
@@ -130,7 +172,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
         case 'closed':
           // The session itself ended; a fresh send will start/resume a new one.
           if (event.sessionId) setSessionId(event.sessionId)
-          setBackgroundActive(false)
+          setBackgroundTasks([])
           setPendingRequest(null)
           activeRunId.current = null
           break
@@ -151,7 +193,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     setError(null)
     setStatus('idle')
     setPendingRequest(null)
-    setBackgroundActive(false)
+    setBackgroundTasks([])
   }, [])
 
   const start = useCallback(
@@ -201,6 +243,29 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     [pendingRequest]
   )
 
+  const killTask = useCallback(
+    (taskId: string) => {
+      setBackgroundTasks((prev) => prev.filter((t) => t.taskId !== taskId))
+      // Interrupt Claude's current turn so it doesn't keep waiting for this task.
+      if (activeRunId.current) window.claude.cancelRun(activeRunId.current)
+    },
+    []
+  )
+
+  const snoozeTask = useCallback((taskId: string, durationMs: number) => {
+    setBackgroundTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === taskId ? { ...t, snoozedUntil: Date.now() + durationMs } : t
+      )
+    )
+  }, [])
+
+  const dismissTask = useCallback((taskId: string) => {
+    setBackgroundTasks((prev) =>
+      prev.map((t) => (t.taskId === taskId ? { ...t, dismissedWatchdog: true } : t))
+    )
+  }, [])
+
   return {
     status,
     messages,
@@ -210,10 +275,14 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     commands,
     pendingRequest,
     backgroundActive,
+    backgroundTasks,
     usage,
     setMessages,
     start,
     cancel,
-    respond
+    respond,
+    killTask,
+    snoozeTask,
+    dismissTask
   }
 }
