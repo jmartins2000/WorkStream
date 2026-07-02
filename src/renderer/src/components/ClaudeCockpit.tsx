@@ -43,14 +43,16 @@ interface ClaudeCockpitProps {
   /** Called after the user hands control back to Claude (sent a prompt or
    *  answered a prompt), so the app can switch to Stremio. */
   onHandOff: () => void
+  /** Watchdog threshold in ms (0 = never). Comes from user settings. */
+  watchdogMs?: number
 }
 
 /** The full Claude Code workspace: session browser + transcript + composer. */
-export function ClaudeCockpit({ run, onHandOff }: ClaudeCockpitProps): JSX.Element {
+export function ClaudeCockpit({ run, onHandOff, watchdogMs }: ClaudeCockpitProps): JSX.Element {
   const sessions = useSessions()
   const [cwd, setCwd] = useState<string>('')
   const [settings, setSettings] = useState<RunSettings>(DEFAULT_RUN_SETTINGS)
-  const alertingTask = useTaskWatchdog(run.backgroundTasks)
+  const alertingTask = useTaskWatchdog(run.backgroundTasks, watchdogMs)
 
   // Default the working directory to the selected project's path.
   useEffect(() => {

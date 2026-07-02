@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { BrowserPane } from './components/BrowserPane'
 import { ClaudeCockpit } from './components/ClaudeCockpit'
+import { SettingsPanel } from './components/SettingsPanel'
 import type { MediaHandle } from './components/StremioPane'
 import { StremioPane } from './components/StremioPane'
 import { YouTubePane } from './components/YouTubePane'
 import { useClaudeRun } from './useClaudeRun'
+import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
 
 type View = 'claude' | 'stremio' | 'youtube' | 'browser'
@@ -18,7 +20,9 @@ export function App(): JSX.Element {
   const [view, setView] = useState<View>('claude')
   // Remember which media tab the user was last on so hand-off returns them there.
   const [lastMediaView, setLastMediaView] = useState<MediaView>('stremio')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { theme, toggle } = useTheme()
+  const { settings, setWatchdogMs } = useSettings()
 
   // Claude needs the user: pause all media, exit any fullscreen, then show the cockpit.
   // exitFullscreen must be awaited — the fullscreen overlay covers the Claude pane
@@ -139,6 +143,15 @@ export function App(): JSX.Element {
           <button
             type="button"
             className="theme-toggle"
+            onClick={() => setSettingsOpen((v) => !v)}
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <GearIcon />
+          </button>
+          <button
+            type="button"
+            className="theme-toggle"
             onClick={toggle}
             title={theme === 'dark' ? 'Switch to Daylight' : 'Switch to Lamplight'}
             aria-label="Toggle theme"
@@ -160,10 +173,26 @@ export function App(): JSX.Element {
           <BrowserPane ref={browserRef} />
         </div>
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
-          <ClaudeCockpit run={run} onHandOff={handleHandOff} />
+          <ClaudeCockpit run={run} onHandOff={handleHandOff} watchdogMs={settings.watchdogMs} />
         </div>
+        {settingsOpen && (
+          <SettingsPanel
+            watchdogMs={settings.watchdogMs}
+            onWatchdogMsChange={setWatchdogMs}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
       </main>
     </div>
+  )
+}
+
+function GearIcon(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   )
 }
 

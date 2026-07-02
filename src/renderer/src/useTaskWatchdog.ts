@@ -22,6 +22,12 @@ export function useTaskWatchdog(
 
   useEffect(() => {
     const check = (): void => {
+      // watchdogMs === 0 means the user disabled the watchdog entirely.
+      if (!watchdogMs) {
+        setAlertingTaskId(null)
+        return
+      }
+
       const now = Date.now()
       const taskIds = new Set(tasks.map((t) => t.taskId))
 
