@@ -144,7 +144,7 @@ export interface RunSettings {
 export const DEFAULT_RUN_SETTINGS: RunSettings = {
   model: 'default',
   effort: 'high',
-  permissionMode: 'default'
+  permissionMode: 'bypassPermissions'
 }
 
 /** Options for starting a new or resumed run. */
