@@ -111,30 +111,41 @@ export function Transcript({ messages, streamingText, running }: TranscriptProps
   const endRef = useRef<HTMLDivElement>(null)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
-  // Refs used for scroll-position restoration when prepending history.
-  // Using refs (not state) avoids an extra render cycle.
+  // Refs used for scroll-position management. Using refs (not state) avoids
+  // extra render cycles.
   const prevScrollHeightRef = useRef(0)
   const loadingMoreRef = useRef(false)
+  // Set to true by the session-reset effect so the visibleCount effect knows
+  // to scroll to the bottom rather than restore the old scroll position.
+  const pendingScrollToBottomRef = useRef(false)
 
   const hasMore = visibleCount < messages.length
   const visibleMessages = messages.slice(-visibleCount)
 
   // Reset windowing whenever the session changes (different first message id).
+  // Mark pendingScrollToBottomRef so the visibleCount effect scrolls to the
+  // bottom after the DOM reflects the new (smaller) slice.
   const firstMsgId = messages[0]?.id
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
     loadingMoreRef.current = false
+    pendingScrollToBottomRef.current = true
   }, [firstMsgId])
 
-  // Auto-scroll to the bottom when new messages arrive or streaming progresses,
-  // unless we're in the middle of loading older history from the top.
+  // Auto-scroll to the bottom when new messages arrive or streaming progresses.
+  // Skip only when loading older history (scroll position is restored separately).
+  // When a session just changed (pendingScrollToBottomRef), use instant scroll
+  // instead of smooth — and always clear the flag so it doesn't linger.
   useEffect(() => {
     if (loadingMoreRef.current) return
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    endRef.current?.scrollIntoView({
+      behavior: pendingScrollToBottomRef.current ? 'instant' : 'smooth'
+    })
+    pendingScrollToBottomRef.current = false
   }, [messages, streamingText])
 
-  // After a page of older messages is prepended: restore scroll position so
-  // the user's viewport stays on the same message, not the new top.
+  // After visibleCount changes due to loading older messages: restore the
+  // scroll position so the viewport stays on the same message, not the new top.
   useEffect(() => {
     if (!loadingMoreRef.current) return
     const el = scrollRef.current
