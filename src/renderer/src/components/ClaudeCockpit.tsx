@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX } from 'react'
 import {
   DEFAULT_RUN_SETTINGS,
   type RunSettings,
@@ -58,6 +58,18 @@ export function ClaudeCockpit({ run, onHandOff, watchdogMs }: ClaudeCockpitProps
   useEffect(() => {
     if (sessions.selectedProject) setCwd(sessions.selectedProject.cwd)
   }, [sessions.selectedProject])
+
+  // When the SDK forks a historical session into a new one (resume creates a
+  // new file), the run's sessionId changes after the turn starts. Refresh the
+  // sidebar so the new session appears and is highlighted as active immediately.
+  const prevSessionId = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevSessionId.current
+    prevSessionId.current = run.sessionId
+    if (run.sessionId && prev !== null && run.sessionId !== prev) {
+      void sessions.refresh()
+    }
+  }, [run.sessionId, sessions])
 
   const handleSelectSession = async (session: SessionSummary): Promise<void> => {
     setCwd(session.cwd)
