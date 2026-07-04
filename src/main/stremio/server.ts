@@ -11,11 +11,11 @@
  * so on Apple Silicon this also has to make sure Rosetta 2 is installed.
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { StremioServerStatus } from '../../shared/types.js'
 
@@ -46,6 +46,55 @@ function binariesPresent(): boolean {
 
 function needsRosetta(): boolean {
   return process.arch === 'arm64' && !existsSync(ROSETTA_PATH)
+}
+
+/**
+ * Raise the server's torrent-engine limits before it boots.
+ *
+ * The stock server-settings.json throttles downloads to 2.5–3.5 MB/s and 55
+ * peer connections. Stremio's native app gets away with that because its
+ * player (mpv) reads the stream sequentially over one connection — but the
+ * web player used in our webview can't decode common audio codecs (EAC3/AC3),
+ * so it plays through the server's HLS converter, which runs several parallel
+ * ffmpeg readers that seek around the file. Under the stock caps that pipeline
+ * produces segments barely at real-time speed → endless buffering (measured:
+ * 6–7s per 4s segment, with 70+ peers queued beyond the connection cap).
+ *
+ * Values are applied as *floors* — an existing higher/unlimited user setting
+ * is never downgraded. The file is shared with the native Stremio app; these
+ * are the standard community tweaks and benefit it too. Notably cacheSize:
+ * the 2GB default made our server delete gigabytes of the native app's cache
+ * at every launch.
+ */
+function tuneServerSettings(): void {
+  const settingsPath = join(app.getPath('appData'), 'stremio-server', 'server-settings.json')
+  try {
+    let settings: Record<string, unknown> = {}
+    if (existsSync(settingsPath)) {
+      const parsed: unknown = JSON.parse(readFileSync(settingsPath, 'utf8'))
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        settings = parsed as Record<string, unknown>
+      }
+    } else {
+      mkdirSync(dirname(settingsPath), { recursive: true })
+    }
+
+    const floor = (key: string, min: number): void => {
+      const value = settings[key]
+      if (typeof value !== 'number' || value < min) settings[key] = min
+    }
+    floor('btMaxConnections', 200)
+    floor('btDownloadSpeedSoftLimit', 20 * 1024 * 1024) // 20 MB/s (stock: 2.5)
+    floor('btDownloadSpeedHardLimit', 40 * 1024 * 1024) // 40 MB/s (stock: 3.5)
+    // null means "unlimited" in Stremio's settings — leave that alone.
+    if (settings.cacheSize !== null) floor('cacheSize', 10 * 1024 * 1024 * 1024) // 10 GB
+
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+    console.log('[stremio-server] tuned server-settings.json (bt limits / cache floors)')
+  } catch (err) {
+    // Non-fatal: the server still runs, just with stock throttles.
+    console.warn('[stremio-server] could not tune server-settings.json:', err)
+  }
 }
 
 async function waitUntilReady(): Promise<boolean> {
@@ -86,6 +135,9 @@ export async function start(emit: Emit): Promise<void> {
   }
 
   setStatus({ state: 'starting' }, emit)
+
+  // Must happen before the spawn — server.js reads the file once at boot.
+  tuneServerSettings()
 
   const dir = binDir()
   const proc = spawn(join(dir, 'stremio-runtime'), [join(dir, 'server.js')], {

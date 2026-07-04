@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, session, shell } from 'electron'
 import { broadcastStremioStatus, registerIpcHandlers } from './ipc.js'
 import * as stremioServer from './stremio/server.js'
 
@@ -9,6 +9,12 @@ import * as stremioServer from './stremio/server.js'
 // itself (electron-builder.yml's productName), so this is a dev-only fix in
 // practice, but harmless either way.
 app.setName('WorkStream')
+
+// Allow the Stremio webview to autoplay audio/video without requiring a prior
+// user gesture. Chromium's default policy forces media that starts before any
+// user interaction to use muted=true — the web player then can't unmute itself,
+// producing silent video. Must be set before app.whenReady().
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 const isDev = !app.isPackaged
 
@@ -56,6 +62,37 @@ app.whenReady().then(() => {
   // Packaged builds get their icon from the app bundle automatically (see
   // electron-builder.yml's mac.icon); only dev mode needs it set explicitly.
   if (isDev) app.dock?.setIcon(join(__dirname, '../../build/icon.png'))
+
+  // Grant all permission requests from the Stremio webview (audio, video,
+  // fullscreen, etc.). Without this the session may block audio playback.
+  session.fromPartition('persist:stremio').setPermissionRequestHandler(
+    (_webContents, _permission, callback) => callback(true)
+  )
+
+  // Opt-in diagnostics (STREMIO_DEBUG=1): log every request the Stremio webview
+  // makes to the local streaming server (127.0.0.1:11470) with its duration.
+  // This reveals whether playback goes through the transcoder (/hlsv2/…, slow
+  // under Rosetta) or direct play, and which request eats the load time.
+  if (process.env.STREMIO_DEBUG === '1') {
+    const wr = session.fromPartition('persist:stremio').webRequest
+    const starts = new Map<number, number>()
+    const isServer = (url: string): boolean =>
+      url.includes('127.0.0.1:11470') || url.includes('localhost:11470')
+    // Trim query/hash so the log stays readable but keeps the routing prefix.
+    const shorten = (url: string): string => url.split('?')[0].slice(0, 140)
+    wr.onSendHeaders((details) => {
+      if (isServer(details.url)) starts.set(details.id, Date.now())
+    })
+    const finish = (details: { id: number; url: string; method: string }, label: string): void => {
+      if (!isServer(details.url)) return
+      const started = starts.get(details.id)
+      starts.delete(details.id)
+      const ms = started ? Date.now() - started : -1
+      console.log(`[stremio-net] ${label} ${ms}ms ${details.method} ${shorten(details.url)}`)
+    }
+    wr.onCompleted((details) => finish(details, String(details.statusCode)))
+    wr.onErrorOccurred((details) => finish(details, `ERR:${details.error}`))
+  }
 
   registerIpcHandlers()
   createWindow()

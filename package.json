@@ -8,6 +8,8 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:test": "VITE_UNLOCK_MEDIA=1 electron-vite dev",
+    "dev:debug": "VITE_UNLOCK_MEDIA=1 STREMIO_DEBUG=1 electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "start": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",

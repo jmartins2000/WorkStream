@@ -12,6 +12,12 @@ import { useTheme } from './useTheme'
 type View = 'claude' | 'stremio' | 'youtube' | 'browser'
 type MediaView = Exclude<View, 'claude'>
 
+// Dev/test escape hatch. `npm run dev:test` sets VITE_UNLOCK_MEDIA=1, which
+// makes the media tabs (Stremio/YouTube/Browser) reachable without a live
+// Claude run — normally they're "earned" only while Claude is working. Off in
+// any normal `npm run dev`/production build.
+const UNLOCK_MEDIA = import.meta.env.VITE_UNLOCK_MEDIA === '1'
+
 export function App(): JSX.Element {
   const stremioRef = useRef<MediaHandle>(null)
   const youtubeRef = useRef<MediaHandle>(null)
@@ -51,7 +57,8 @@ export function App(): JSX.Element {
   const showClaude = useCallback(() => setView('claude'), [])
 
   // Media tabs are "earned": only accessible while Claude is actively working.
-  const mediaAllowed = run.status === 'running' || run.backgroundActive
+  // (UNLOCK_MEDIA bypasses this for local testing — see dev:test script.)
+  const mediaAllowed = UNLOCK_MEDIA || run.status === 'running' || run.backgroundActive
 
   const showMedia = useCallback(
     (tab: MediaView) => {
