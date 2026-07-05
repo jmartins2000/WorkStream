@@ -1,0 +1,22 @@
+appId: ai.augustalabs.workstream
+productName: WorkStream
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  # The local Stremio streaming server (fetched by npm run fetch:stremio);
+  # bundled so the packaged app can stream offline-capable, same as Stremio's
+  # own desktop client. Lands at Contents/Resources/stremio-service.
+  - from: resources/stremio-service
+    to: stremio-service
+mac:
+  category: public.app-category.entertainment
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  # Enable hardened runtime; signing/notarization are configured at release time.
+  hardenedRuntime: true
