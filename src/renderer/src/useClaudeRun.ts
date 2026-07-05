@@ -28,7 +28,13 @@ export interface UseClaudeRun {
   status: RunStatus
   messages: TranscriptMessage[]
   streamingText: string
+  /** Prompts sent while Claude was mid-turn, not yet picked up. They join the
+   *  transcript when the CLI starts the turn that includes them. */
+  queuedPrompts: string[]
   sessionId: string | null
+  /** Id of the live streaming session, if any — needed for control APIs
+   *  (/context, /mcp, mid-run switches). Null when no session is live. */
+  runId: string | null
   error: string | null
   /** Slash commands available in the current session (from the init event). */
   commands: string[]
@@ -41,7 +47,16 @@ export interface UseClaudeRun {
   /** Cost/token usage from the most recent completed run, if any. */
   usage: RunUsage | null
   setMessages: (messages: TranscriptMessage[], sessionId: string | null) => void
-  start: (prompt: string, cwd: string, settings?: RunSettings) => Promise<void>
+  start: (
+    prompt: string,
+    cwd: string,
+    settings?: RunSettings,
+    remoteControl?: boolean
+  ) => Promise<void>
+  /** Make sure a live streaming session exists for the open conversation
+   *  (warm-opens one with no prompt if needed), so the control APIs
+   *  (/context, /mcp, …) work before the first message is sent. */
+  ensureSession: (cwd: string, settings?: RunSettings, remoteControl?: boolean) => Promise<void>
   cancel: () => void
   /** Reply to the pending input request. */
   respond: (response: InputResponse) => void
@@ -81,6 +96,47 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
   const backgroundActive = backgroundTasks.length > 0
 
   const activeRunId = useRef<string | null>(null)
+  // State mirror of activeRunId so components can react to it (panels that
+  // need the live session's control APIs).
+  const [runId, setRunId] = useState<string | null>(null)
+
+  // Prompts pushed while a turn was in flight. The CLI queues them and starts
+  // a fresh turn per queued prompt once the current one ends (verified: no
+  // mid-turn steering, no user-message echo in the stream). The ref is the
+  // source of truth (event handlers read it synchronously); the state mirrors
+  // it for rendering.
+  const queueRef = useRef<string[]>([])
+  const [queuedPrompts, setQueuedPrompts] = useState<string[]>([])
+
+  // status mirror so callbacks can read the current value without re-binding.
+  const statusRef = useRef<RunStatus>(status)
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
+  // Task-list mirror for the same reason (the event handler must know whether
+  // background work is still running when a turn completes).
+  const tasksRef = useRef<BackgroundTask[]>(backgroundTasks)
+  useEffect(() => {
+    tasksRef.current = backgroundTasks
+  }, [backgroundTasks])
+
+  /** Move all queued prompts into the transcript (they've been consumed). */
+  const flushQueue = (): void => {
+    if (queueRef.current.length === 0) return
+    const queued = queueRef.current
+    queueRef.current = []
+    setQueuedPrompts([])
+    setMessagesState((prev) => [
+      ...prev,
+      ...queued.map((text, i) => ({
+        id: `user-${Date.now()}-${i}`,
+        role: 'user' as const,
+        parts: [{ kind: 'text' as const, text }],
+        timestamp: Date.now()
+      }))
+    ])
+  }
   const onAttentionRef = useRef(onAttention)
   useEffect(() => {
     onAttentionRef.current = onAttention
@@ -93,6 +149,9 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
       switch (event.type) {
         case 'started':
           if (event.sessionId) setSessionId(event.sessionId)
+          // A new turn began — any prompts queued mid-run are part of it now,
+          // so this is where they join the transcript.
+          flushQueue()
           break
 
         case 'slashCommands':
@@ -163,18 +222,32 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
             }
             return ''
           })
+          // Queued prompts mean the CLI is about to start the next turn for
+          // them — don't flip to done or grab the user's attention in between.
+          if (queueRef.current.length > 0) {
+            setPendingRequest(null)
+            break
+          }
           setStatus(event.ok ? 'done' : 'error')
           setPendingRequest(null)
+          // Background work (shell command or subagent) still running: leave
+          // the user in their media tab — the agent auto-continues when the
+          // task reports in, and the watchdog covers stale ones. Attention is
+          // grabbed only when everything is actually done (or errored).
+          if (event.ok && tasksRef.current.length > 0) break
           onAttentionRef.current()
           break
         }
 
         case 'closed':
           // The session itself ended; a fresh send will start/resume a new one.
+          // Flush any still-queued prompts so the text isn't silently lost.
+          flushQueue()
           if (event.sessionId) setSessionId(event.sessionId)
           setBackgroundTasks([])
           setPendingRequest(null)
           activeRunId.current = null
+          setRunId(null)
           break
       }
     })
@@ -186,6 +259,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     if (activeRunId.current) {
       void window.claude.endRun(activeRunId.current)
       activeRunId.current = null
+      setRunId(null)
     }
     setMessagesState(next)
     setSessionId(nextSessionId)
@@ -194,12 +268,24 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     setStatus('idle')
     setPendingRequest(null)
     setBackgroundTasks([])
+    queueRef.current = []
+    setQueuedPrompts([])
   }, [])
 
   const start = useCallback(
-    async (prompt: string, cwd: string, settings?: RunSettings) => {
+    async (prompt: string, cwd: string, settings?: RunSettings, remoteControl?: boolean) => {
       const trimmed = prompt.trim()
       if (!trimmed) return
+
+      // Sent while a turn is in flight: the CLI queues it and runs it as the
+      // next turn. Keep it out of the transcript until then — it renders as a
+      // dimmed "queued" entry and joins the history at its injection point.
+      if (activeRunId.current && statusRef.current === 'running') {
+        queueRef.current = [...queueRef.current, trimmed]
+        setQueuedPrompts(queueRef.current)
+        await window.claude.sendMessage(activeRunId.current, trimmed)
+        return
+      }
 
       const userMessage: TranscriptMessage = {
         id: `user-${Date.now()}`,
@@ -208,7 +294,6 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
         timestamp: Date.now()
       }
       setMessagesState((prev) => [...prev, userMessage])
-      setStreamingText('')
       setError(null)
       setStatus('running')
 
@@ -217,14 +302,36 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
       if (activeRunId.current) {
         await window.claude.sendMessage(activeRunId.current, trimmed)
       } else {
-        const { runId } = await window.claude.startRun({
+        setStreamingText('')
+        const started = await window.claude.startRun({
           prompt: trimmed,
           cwd,
           resumeSessionId: sessionId ?? undefined,
-          settings
+          settings,
+          remoteControl
         })
-        activeRunId.current = runId
+        activeRunId.current = started.runId
+        setRunId(started.runId)
       }
+    },
+    [sessionId]
+  )
+
+  // Open a warm streaming session (no prompt) so control APIs work before the
+  // first message. Status stays as-is — nothing is running yet; the first real
+  // send pushes into this same session.
+  const ensureSession = useCallback(
+    async (cwd: string, settings?: RunSettings, remoteControl?: boolean) => {
+      if (activeRunId.current || !cwd) return
+      const started = await window.claude.startRun({
+        prompt: '',
+        cwd,
+        resumeSessionId: sessionId ?? undefined,
+        settings,
+        remoteControl
+      })
+      activeRunId.current = started.runId
+      setRunId(started.runId)
     },
     [sessionId]
   )
@@ -237,6 +344,10 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     (response: InputResponse) => {
       if (!pendingRequest) return
       void window.claude.respondInput(pendingRequest.requestId, response)
+      // Plan approval flips the session out of plan mode (like the CLI).
+      if (response.kind === 'permission' && response.setMode && activeRunId.current) {
+        void window.claude.setRunPermissionMode(activeRunId.current, response.setMode)
+      }
       setPendingRequest(null)
       setStatus('running')
     },
@@ -245,9 +356,11 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
 
   const killTask = useCallback(
     (taskId: string) => {
+      // Optimistic removal; the runner's 'stopped' notification is idempotent.
       setBackgroundTasks((prev) => prev.filter((t) => t.taskId !== taskId))
-      // Interrupt Claude's current turn so it doesn't keep waiting for this task.
-      if (activeRunId.current) window.claude.cancelRun(activeRunId.current)
+      // Stop just this task (shell or subagent) — the session and any other
+      // background work keep running.
+      if (activeRunId.current) void window.claude.stopTask(activeRunId.current, taskId)
     },
     []
   )
@@ -270,7 +383,9 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     status,
     messages,
     streamingText,
+    queuedPrompts,
     sessionId,
+    runId,
     error,
     commands,
     pendingRequest,
@@ -279,6 +394,7 @@ export function useClaudeRun(onAttention: () => void): UseClaudeRun {
     usage,
     setMessages,
     start,
+    ensureSession,
     cancel,
     respond,
     killTask,

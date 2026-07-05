@@ -10,6 +10,9 @@ interface RunSettingsBarProps {
   settings: RunSettingsType
   onChange: (settings: RunSettingsType) => void
   disabled: boolean
+  /** Disable only the effort selector (it can't change mid-run, unlike
+   *  model/permission mode which the SDK can switch on a live session). */
+  disableEffort?: boolean
 }
 
 const PERMISSION_LABELS: Record<(typeof RUN_PERMISSION_MODES)[number], string> = {
@@ -20,7 +23,12 @@ const PERMISSION_LABELS: Record<(typeof RUN_PERMISSION_MODES)[number], string> =
 }
 
 /** Compact selector bar mirroring /model, /effort and permission-mode cycling. */
-export function RunSettingsBar({ settings, onChange, disabled }: RunSettingsBarProps): JSX.Element {
+export function RunSettingsBar({
+  settings,
+  onChange,
+  disabled,
+  disableEffort = false
+}: RunSettingsBarProps): JSX.Element {
   return (
     <div className="run-settings">
       <label className="run-settings__field">
@@ -42,7 +50,7 @@ export function RunSettingsBar({ settings, onChange, disabled }: RunSettingsBarP
         <span>Effort</span>
         <select
           value={settings.effort}
-          disabled={disabled}
+          disabled={disabled || disableEffort}
           onChange={(e) =>
             onChange({ ...settings, effort: e.target.value as RunSettingsType['effort'] })
           }

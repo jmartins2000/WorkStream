@@ -6,6 +6,9 @@ interface TranscriptProps {
   messages: TranscriptMessage[]
   streamingText: string
   running: boolean
+  /** Prompts sent mid-run, waiting for the CLI to start their turn. Rendered
+   *  dimmed at the bottom; they join `messages` at their injection point. */
+  queuedPrompts?: string[]
 }
 
 const ROLE_LABEL: Record<TranscriptMessage['role'], string> = {
@@ -106,7 +109,12 @@ function Part({ part }: { part: MessagePart }): JSX.Element | null {
  * to the top loads the previous page, with scroll-position restoration so
  * the viewport doesn't jump.
  */
-export function Transcript({ messages, streamingText, running }: TranscriptProps): JSX.Element {
+export function Transcript({
+  messages,
+  streamingText,
+  running,
+  queuedPrompts = []
+}: TranscriptProps): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -142,7 +150,7 @@ export function Transcript({ messages, streamingText, running }: TranscriptProps
       behavior: pendingScrollToBottomRef.current ? 'instant' : 'smooth'
     })
     pendingScrollToBottomRef.current = false
-  }, [messages, streamingText])
+  }, [messages, streamingText, queuedPrompts])
 
   // After visibleCount changes due to loading older messages: restore the
   // scroll position so the viewport stays on the same message, not the new top.
@@ -215,6 +223,18 @@ export function Transcript({ messages, streamingText, running }: TranscriptProps
       )}
 
       {running && !streamingText && <div className="thinking">Claude is working…</div>}
+
+      {queuedPrompts.map((text, i) => (
+        <article key={`queued-${i}`} className="message message--user message--queued">
+          <header className="message__role">
+            You
+            <span className="message__queued-badge">queued</span>
+          </header>
+          <div className="message__parts">
+            <div className="message__text">{text}</div>
+          </div>
+        </article>
+      ))}
 
       <div ref={endRef} />
     </div>

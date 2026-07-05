@@ -6,10 +6,18 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
+  type AgentSummary,
   type ClaudeBridge,
+  type CommandSummary,
+  type ContextUsage,
   type InputResponse,
+  type McpServerInfo,
+  type MemoryFile,
+  type MemoryScope,
   type ProjectSummary,
   type RunEvent,
+  type RunModel,
+  type RunPermissionMode,
   type SessionSummary,
   type StartRunOptions,
   type StartRunResult,
@@ -36,14 +44,38 @@ const api: ClaudeBridge = {
   sendMessage: (runId: string, prompt: string) =>
     ipcRenderer.invoke(IPC.sendMessage, runId, prompt) as Promise<void>,
   cancelRun: (runId: string) => ipcRenderer.invoke(IPC.cancelRun, runId) as Promise<void>,
+  stopTask: (runId: string, taskId: string) =>
+    ipcRenderer.invoke(IPC.stopTask, runId, taskId) as Promise<void>,
   endRun: (runId: string) => ipcRenderer.invoke(IPC.endRun, runId) as Promise<void>,
   respondInput: (requestId: string, response: InputResponse) =>
     ipcRenderer.invoke(IPC.respondInput, requestId, response) as Promise<void>,
+  getContextUsage: (runId: string) =>
+    ipcRenderer.invoke(IPC.getContextUsage, runId) as Promise<ContextUsage | null>,
+  getMcpStatus: (runId: string) =>
+    ipcRenderer.invoke(IPC.getMcpStatus, runId) as Promise<McpServerInfo[] | null>,
+  getAgents: (runId: string) =>
+    ipcRenderer.invoke(IPC.getAgents, runId) as Promise<AgentSummary[] | null>,
+  getCommands: (runId: string) =>
+    ipcRenderer.invoke(IPC.getCommands, runId) as Promise<CommandSummary[] | null>,
+  setRunModel: (runId: string, model: RunModel) =>
+    ipcRenderer.invoke(IPC.setRunModel, runId, model) as Promise<void>,
+  setRunPermissionMode: (runId: string, mode: RunPermissionMode) =>
+    ipcRenderer.invoke(IPC.setRunPermissionMode, runId, mode) as Promise<void>,
+  reconnectMcpServer: (runId: string, serverName: string) =>
+    ipcRenderer.invoke(IPC.reconnectMcpServer, runId, serverName) as Promise<void>,
+  toggleMcpServer: (runId: string, serverName: string, enabled: boolean) =>
+    ipcRenderer.invoke(IPC.toggleMcpServer, runId, serverName, enabled) as Promise<void>,
+  readMemory: (scope: MemoryScope, cwd: string) =>
+    ipcRenderer.invoke(IPC.readMemory, scope, cwd) as Promise<MemoryFile>,
+  writeMemory: (scope: MemoryScope, cwd: string, content: string) =>
+    ipcRenderer.invoke(IPC.writeMemory, scope, cwd, content) as Promise<void>,
   onRunEvent: (listener: (event: RunEvent) => void) => {
     const handler = (_event: IpcRendererEvent, payload: RunEvent): void => listener(payload)
     ipcRenderer.on(IPC.runEvent, handler)
     return () => ipcRenderer.removeListener(IPC.runEvent, handler)
   },
+  setAdblock: (enabled: boolean, partitions: string[]) =>
+    ipcRenderer.invoke(IPC.setAdblock, enabled, partitions) as Promise<void>,
   getStremioServerStatus: () =>
     ipcRenderer.invoke(IPC.getStremioServerStatus) as Promise<StremioServerStatus>,
   installRosetta: () => ipcRenderer.invoke(IPC.installRosetta) as Promise<void>,

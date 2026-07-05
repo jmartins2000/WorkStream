@@ -26,7 +26,18 @@ import {
   type Query,
   type SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk'
-import type { InputResponse, RunEvent, RunUsage, StartRunOptions } from '../../shared/types.js'
+import type {
+  AgentSummary,
+  CommandSummary,
+  ContextUsage,
+  InputResponse,
+  McpServerInfo,
+  RunEvent,
+  RunModel,
+  RunPermissionMode,
+  RunUsage,
+  StartRunOptions
+} from '../../shared/types.js'
 import { contentToParts, toolDetail } from './transcript.js'
 import { parseQuestions, withAnswers } from './interaction.js'
 
@@ -97,14 +108,21 @@ function makeInputStream(): InputStream {
   }
 }
 
-/** Start a streaming session with an initial prompt. Returns the run id. */
+/**
+ * Start a streaming session. Returns the run id.
+ *
+ * An empty prompt opens a *warm* session: the CLI boots (connects MCP servers,
+ * loads commands/agents — so the control APIs work) but no turn runs until the
+ * first message is pushed via `sendMessage`. Used by the Session panel to
+ * inspect a conversation before anything has been sent.
+ */
 export function startRun(options: StartRunOptions, emit: Emit): string {
   const runId = randomUUID()
   const abort = new AbortController()
   const input = makeInputStream()
   const run: ActiveRun = { abort, input }
   activeRuns.set(runId, run)
-  input.push(options.prompt)
+  if (options.prompt.trim()) input.push(options.prompt)
   void drive(runId, options, emit, run)
   return runId
 }
@@ -150,6 +168,103 @@ export function resolveInput(requestId: string, response: InputResponse): void {
   }
 }
 
+/* ----------------------------------------------------------------------------
+ * Live-session control APIs (the SDK's control requests — /context, /mcp,
+ * /agents, /skills, and mid-run model/mode switching). These only work while
+ * a streaming session is alive; they return null / no-op otherwise.
+ * ------------------------------------------------------------------------- */
+
+function liveQuery(runId: string): Query | undefined {
+  return activeRuns.get(runId)?.query
+}
+
+/** Context-window usage breakdown for the live session (/context). */
+export async function getContextUsage(runId: string): Promise<ContextUsage | null> {
+  const q = liveQuery(runId)
+  if (!q) return null
+  const r = await q.getContextUsage()
+  return {
+    totalTokens: r.totalTokens,
+    maxTokens: r.maxTokens,
+    percentage: r.percentage,
+    model: r.model,
+    categories: r.categories.map((c) => ({ name: c.name, tokens: c.tokens }))
+  }
+}
+
+/** MCP server statuses for the live session (/mcp). */
+export async function getMcpStatus(runId: string): Promise<McpServerInfo[] | null> {
+  const q = liveQuery(runId)
+  if (!q) return null
+  const servers = await q.mcpServerStatus()
+  return servers.map((s) => ({
+    name: s.name,
+    status: s.status,
+    error: s.error,
+    scope: s.scope,
+    tools: (s.tools ?? []).map((t) => t.name)
+  }))
+}
+
+/** Available subagents for the live session (/agents). */
+export async function getAgents(runId: string): Promise<AgentSummary[] | null> {
+  const q = liveQuery(runId)
+  if (!q) return null
+  const agents = await q.supportedAgents()
+  return agents.map((a) => ({ name: a.name, description: a.description, model: a.model }))
+}
+
+/** Available commands/skills for the live session (/skills). */
+export async function getCommands(runId: string): Promise<CommandSummary[] | null> {
+  const q = liveQuery(runId)
+  if (!q) return null
+  const commands = await q.supportedCommands()
+  return commands.map((c) => ({
+    name: c.name,
+    description: c.description,
+    argumentHint: c.argumentHint || undefined
+  }))
+}
+
+/** Switch the live session's model mid-run ('default' clears the override). */
+export async function setRunModel(runId: string, model: RunModel): Promise<void> {
+  await liveQuery(runId)?.setModel(model === 'default' ? undefined : model)
+}
+
+/** Switch the live session's permission mode mid-run. */
+export async function setRunPermissionMode(
+  runId: string,
+  mode: RunPermissionMode
+): Promise<void> {
+  await liveQuery(runId)?.setPermissionMode(mode)
+}
+
+/**
+ * Stop one background task (shell command or subagent) without touching the
+ * rest of the session. A task_notification with status 'stopped' follows.
+ */
+export async function stopTask(runId: string, taskId: string): Promise<void> {
+  await liveQuery(runId)?.stopTask(taskId)
+}
+
+/** Reconnect an MCP server by name (throws on failure, like the SDK). */
+export async function reconnectMcpServer(runId: string, serverName: string): Promise<void> {
+  const q = liveQuery(runId)
+  if (!q) throw new Error('No live session.')
+  await q.reconnectMcpServer(serverName)
+}
+
+/** Enable or disable an MCP server by name (throws on failure). */
+export async function toggleMcpServer(
+  runId: string,
+  serverName: string,
+  enabled: boolean
+): Promise<void> {
+  const q = liveQuery(runId)
+  if (!q) throw new Error('No live session.')
+  await q.toggleMcpServer(serverName, enabled)
+}
+
 /** Number of runs currently in flight (used for shutdown handling/tests). */
 export function activeRunCount(): number {
   return activeRuns.size
@@ -186,11 +301,20 @@ function makeCanUseTool(runId: string, emit: Emit, abort: AbortController): CanU
       return { behavior: 'deny', message: 'User dismissed the question.' }
     }
 
+    // ExitPlanMode carries the full plan — surface it for the plan-review UI.
+    const plan =
+      toolName === 'ExitPlanMode' &&
+      typeof input === 'object' &&
+      input !== null &&
+      typeof (input as Record<string, unknown>).plan === 'string'
+        ? ((input as Record<string, unknown>).plan as string)
+        : undefined
+
     // Generic tool approval.
     emit({
       type: 'needsInput',
       runId,
-      request: { kind: 'permission', requestId, toolName, detail: toolDetail(input) }
+      request: { kind: 'permission', requestId, toolName, detail: toolDetail(input), plan }
     })
     const response = await awaitInput(requestId, abort)
     if (response.kind !== 'permission' || response.decision === 'deny') {
@@ -228,6 +352,9 @@ async function drive(
   // 'default' means "let the account/CLI pick" — leave the option unset.
   if (settings?.model && settings.model !== 'default') queryOptions.model = settings.model
   if (settings?.effort) queryOptions.effort = settings.effort
+  // Start the Remote Control bridge so the session shows up on claude.ai/code
+  // and can be driven from the phone/web while this app runs it.
+  if (options.remoteControl) queryOptions.settings = { remoteControlAtStartup: true }
 
   // Slash commands arrive on every `init` (including background continuations);
   // only surface them once per session.
@@ -265,10 +392,60 @@ async function drive(
               status: msg.status,
               summary: msg.summary
             })
+          } else if (msg.subtype === 'task_updated') {
+            // Terminal states can arrive via task_updated without a
+            // task_notification (e.g. a killed task). Emit completion so the
+            // renderer's task list never leaks entries; duplicates are
+            // harmless (removal is idempotent).
+            const status = msg.patch.status
+            if (status === 'completed' || status === 'failed' || status === 'killed') {
+              emit({
+                type: 'taskCompleted',
+                runId,
+                taskId: msg.task_id,
+                status: status === 'killed' ? 'stopped' : status,
+                summary: msg.patch.error ?? ''
+              })
+            }
+          } else if (msg.subtype === 'local_command_output') {
+            // Output of a locally-handled slash command (e.g. /remote-control's
+            // claude.ai link, /compact's summary note). Surface it in the
+            // transcript so passthrough commands aren't silent.
+            if (typeof msg.content === 'string' && msg.content.trim()) {
+              emit({
+                type: 'message',
+                runId,
+                message: {
+                  id: msg.uuid,
+                  role: 'system',
+                  parts: [{ kind: 'text', text: msg.content.trim() }],
+                  timestamp: Date.now()
+                }
+              })
+            }
+          } else if (msg.subtype === 'compact_boundary') {
+            emit({
+              type: 'message',
+              runId,
+              message: {
+                id: msg.uuid,
+                role: 'system',
+                parts: [
+                  {
+                    kind: 'text',
+                    text: `Conversation compacted (${msg.compact_metadata.trigger === 'auto' ? 'automatic' : 'manual'}).`
+                  }
+                ],
+                timestamp: Date.now()
+              }
+            })
           }
           break
 
         case 'stream_event': {
+          // Skip subagent-internal streams — only the top-level conversation
+          // belongs in the transcript.
+          if (msg.parent_tool_use_id) break
           const event = msg.event
           if (
             event?.type === 'content_block_delta' &&
@@ -281,6 +458,10 @@ async function drive(
         }
 
         case 'assistant': {
+          // Subagent messages surface in the parent stream tagged with the
+          // spawning tool_use id; showing them would interleave the agent's
+          // internal work with the real conversation (and flap the status).
+          if (msg.parent_tool_use_id) break
           const parts = contentToParts(msg.message?.content)
           if (parts.length > 0) {
             emit({

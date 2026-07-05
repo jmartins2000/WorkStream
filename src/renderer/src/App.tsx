@@ -4,13 +4,15 @@ import { ClaudeCockpit } from './components/ClaudeCockpit'
 import { SettingsPanel } from './components/SettingsPanel'
 import type { MediaHandle } from './components/StremioPane'
 import { StremioPane } from './components/StremioPane'
-import { YouTubePane } from './components/YouTubePane'
+import { SitePane } from './components/SitePane'
 import { useClaudeRun } from './useClaudeRun'
 import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
 
-type View = 'claude' | 'stremio' | 'youtube' | 'browser'
-type MediaView = Exclude<View, 'claude'>
+/** 'claude' or the id of an entertainment tab (built-in or custom). */
+type View = string
+
+const YOUTUBE_URL = 'https://www.youtube.com/'
 
 // Dev/test escape hatch. `npm run dev:test` sets VITE_UNLOCK_MEDIA=1, which
 // makes the media tabs (Stremio/YouTube/Browser) reachable without a live
@@ -19,30 +21,56 @@ type MediaView = Exclude<View, 'claude'>
 const UNLOCK_MEDIA = import.meta.env.VITE_UNLOCK_MEDIA === '1'
 
 export function App(): JSX.Element {
-  const stremioRef = useRef<MediaHandle>(null)
-  const youtubeRef = useRef<MediaHandle>(null)
-  const browserRef = useRef<MediaHandle>(null)
-
   const [view, setView] = useState<View>('claude')
   // Remember which media tab the user was last on so hand-off returns them there.
-  const [lastMediaView, setLastMediaView] = useState<MediaView>('stremio')
+  const [lastMediaView, setLastMediaView] = useState<string>('stremio')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { theme, toggle } = useTheme()
-  const { settings, setWatchdogMs } = useSettings()
+  const {
+    settings,
+    setWatchdogMs,
+    setRunDefaults,
+    setRemoteControl,
+    setMediaTabs,
+    setAdblock
+  } = useSettings()
+
+  const enabledTabs = settings.mediaTabs.filter((tab) => tab.enabled)
+
+  // Apply ad/tracker blocking to every media partition except Stremio (no ads
+  // there, and filter rules must stay away from the local streaming server).
+  useEffect(() => {
+    const partitions = settings.mediaTabs
+      .filter((tab) => tab.kind !== 'stremio')
+      .map((tab) => (tab.kind === 'custom' ? `persist:custom-${tab.id}` : `persist:${tab.kind}`))
+    void window.claude.setAdblock(settings.adblock, partitions)
+  }, [settings.adblock, settings.mediaTabs])
+
+  // Imperative handles of every mounted media pane, keyed by tab id. Callback
+  // refs are cached so React doesn't re-invoke them on every render.
+  const paneRefs = useRef(new Map<string, MediaHandle | null>())
+  const refCallbacks = useRef(new Map<string, (handle: MediaHandle | null) => void>())
+  const paneRef = (id: string): ((handle: MediaHandle | null) => void) => {
+    let callback = refCallbacks.current.get(id)
+    if (!callback) {
+      callback = (handle) => {
+        paneRefs.current.set(id, handle)
+      }
+      refCallbacks.current.set(id, callback)
+    }
+    return callback
+  }
 
   // Claude needs the user: pause all media, exit any fullscreen, then show the cockpit.
   // exitFullscreen must be awaited — the fullscreen overlay covers the Claude pane
   // until the browser tears it down, so we switch views only after it's gone.
   const handleAttention = useCallback(async () => {
-    stremioRef.current?.pause()
-    youtubeRef.current?.pause()
-    browserRef.current?.pause()
+    const panes = [...paneRefs.current.values()].filter(
+      (handle): handle is MediaHandle => handle !== null
+    )
+    panes.forEach((pane) => pane.pause())
     try {
-      await Promise.all([
-        stremioRef.current?.exitFullscreen() ?? Promise.resolve(),
-        youtubeRef.current?.exitFullscreen() ?? Promise.resolve(),
-        browserRef.current?.exitFullscreen() ?? Promise.resolve(),
-      ])
+      await Promise.all(panes.map((pane) => pane.exitFullscreen()))
     } catch {
       // Don't let a fullscreen-exit failure block showing Claude.
     }
@@ -51,8 +79,15 @@ export function App(): JSX.Element {
 
   const run = useClaudeRun(handleAttention)
 
-  // User sent a prompt or answered Claude — go back to whatever they were watching.
-  const handleHandOff = useCallback(() => setView(lastMediaView), [lastMediaView])
+  // User sent a prompt or answered Claude — go back to whatever they were
+  // watching (or the first enabled tab if that one was removed/disabled).
+  const handleHandOff = useCallback(() => {
+    const target = enabledTabs.some((tab) => tab.id === lastMediaView)
+      ? lastMediaView
+      : enabledTabs[0]?.id
+    if (target) setView(target)
+    // With every entertainment tab disabled there's nowhere to hand off to.
+  }, [lastMediaView, enabledTabs])
 
   const showClaude = useCallback(() => setView('claude'), [])
 
@@ -61,7 +96,7 @@ export function App(): JSX.Element {
   const mediaAllowed = UNLOCK_MEDIA || run.status === 'running' || run.backgroundActive
 
   const showMedia = useCallback(
-    (tab: MediaView) => {
+    (tab: string) => {
       if (!mediaAllowed) return
       setView(tab)
       setLastMediaView(tab)
@@ -69,10 +104,12 @@ export function App(): JSX.Element {
     [mediaAllowed]
   )
 
-  // If Claude stops working while on a media tab, pull back to the cockpit.
+  // If Claude stops working while on a media tab — or the tab was disabled or
+  // removed in settings — pull back to the cockpit.
   useEffect(() => {
-    if (view !== 'claude' && !mediaAllowed) setView('claude')
-  }, [view, mediaAllowed])
+    if (view === 'claude') return
+    if (!mediaAllowed || !enabledTabs.some((tab) => tab.id === view)) setView('claude')
+  }, [view, mediaAllowed, enabledTabs])
 
   // Esc interrupts a running Claude turn (like the CLI).
   useEffect(() => {
@@ -110,7 +147,9 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbar__right">
-          <nav className="topbar__tabs">
+          {/* Coding tabs (Claude today; room for Codex etc.) — separate group
+              from the entertainment tabs. */}
+          <nav className="topbar__tabs topbar__tabs--coding">
             <button
               type="button"
               className={'tab' + (view === 'claude' ? ' tab--active' : '')}
@@ -119,34 +158,23 @@ export function App(): JSX.Element {
               Claude
               {needsAttention && <span className="tab__dot" />}
             </button>
-            <button
-              type="button"
-              className={'tab' + (view === 'stremio' ? ' tab--active' : '')}
-              onClick={() => showMedia('stremio')}
-              disabled={!mediaAllowed}
-              title={mediaAllowed ? 'Watch Stremio' : 'Available while Claude is working'}
-            >
-              Stremio
-            </button>
-            <button
-              type="button"
-              className={'tab' + (view === 'youtube' ? ' tab--active' : '')}
-              onClick={() => showMedia('youtube')}
-              disabled={!mediaAllowed}
-              title={mediaAllowed ? 'Watch YouTube' : 'Available while Claude is working'}
-            >
-              YouTube
-            </button>
-            <button
-              type="button"
-              className={'tab' + (view === 'browser' ? ' tab--active' : '')}
-              onClick={() => showMedia('browser')}
-              disabled={!mediaAllowed}
-              title={mediaAllowed ? 'Browse the web' : 'Available while Claude is working'}
-            >
-              Browser
-            </button>
           </nav>
+          {enabledTabs.length > 0 && (
+            <nav className="topbar__tabs topbar__tabs--media">
+              {enabledTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={'tab' + (view === tab.id ? ' tab--active' : '')}
+                  onClick={() => showMedia(tab.id)}
+                  disabled={!mediaAllowed}
+                  title={mediaAllowed ? tab.label : 'Available while Claude is working'}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
           <button
             type="button"
             className="theme-toggle"
@@ -169,23 +197,55 @@ export function App(): JSX.Element {
       </header>
 
       <main className="stage">
-        {/* All panes stay mounted so playback/session state survive tab switches. */}
-        <div className={'pane pane--media' + (view === 'stremio' ? ' pane--front' : '')}>
-          <StremioPane ref={stremioRef} />
-        </div>
-        <div className={'pane pane--media' + (view === 'youtube' ? ' pane--front' : '')}>
-          <YouTubePane ref={youtubeRef} />
-        </div>
-        <div className={'pane pane--media' + (view === 'browser' ? ' pane--front' : '')}>
-          <BrowserPane ref={browserRef} />
-        </div>
+        {/* All enabled panes stay mounted so playback/session state survive
+            tab switches; disabling a tab in settings unmounts it. */}
+        {enabledTabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={'pane pane--media' + (view === tab.id ? ' pane--front' : '')}
+          >
+            {tab.kind === 'stremio' && <StremioPane ref={paneRef(tab.id)} />}
+            {tab.kind === 'youtube' && (
+              <SitePane
+                ref={paneRef(tab.id)}
+                url={YOUTUBE_URL}
+                partition="persist:youtube"
+                adblock={settings.adblock}
+              />
+            )}
+            {tab.kind === 'browser' && <BrowserPane ref={paneRef(tab.id)} />}
+            {tab.kind === 'custom' && tab.url && (
+              <SitePane
+                ref={paneRef(tab.id)}
+                url={tab.url}
+                partition={`persist:custom-${tab.id}`}
+                adblock={settings.adblock}
+              />
+            )}
+          </div>
+        ))}
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
-          <ClaudeCockpit run={run} onHandOff={handleHandOff} watchdogMs={settings.watchdogMs} />
+          <ClaudeCockpit
+            run={run}
+            onHandOff={handleHandOff}
+            onAttention={() => void handleAttention()}
+            watchdogMs={settings.watchdogMs}
+            runDefaults={settings.runDefaults}
+            remoteControl={settings.remoteControl}
+          />
         </div>
         {settingsOpen && (
           <SettingsPanel
             watchdogMs={settings.watchdogMs}
             onWatchdogMsChange={setWatchdogMs}
+            runDefaults={settings.runDefaults}
+            onRunDefaultsChange={setRunDefaults}
+            remoteControl={settings.remoteControl}
+            onRemoteControlChange={setRemoteControl}
+            mediaTabs={settings.mediaTabs}
+            onMediaTabsChange={setMediaTabs}
+            adblock={settings.adblock}
+            onAdblockChange={setAdblock}
             onClose={() => setSettingsOpen(false)}
           />
         )}

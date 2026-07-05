@@ -1,9 +1,103 @@
-import { forwardRef, useImperativeHandle, useRef, type JSX } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, type JSX } from 'react'
 import type { WebviewElement } from '../webview'
 import { useStremioServer } from '../useStremioServer'
 
 /** The hosted Stremio web app. Embedding it gives full, maintenance-free Stremio. */
 const STREMIO_URL = 'https://web.stremio.com/'
+
+/**
+ * Decode-error auto-recovery, injected into the Stremio page on every load.
+ *
+ * Chromium's video decoder is strict — a corrupt torrent piece or unusual
+ * bitstream mid-file kills playback with a fatal MediaError ("Error occurred
+ * when Decoding") and the web player just gives up. mpv in the native app
+ * shrugs these off. Recovery: when a hooked <video> fires a fatal error while
+ * genuinely playing, remember the position in sessionStorage, reload the
+ * player page, and seek back once the stream is ready again. A history guard
+ * caps recoveries at 3 per 10 minutes so a truly broken file can't reload
+ * forever — after that the player's own error screen stays up.
+ */
+const DECODE_RECOVERY_SCRIPT = `(() => {
+  if (window.__wsRecoveryInstalled) return
+  window.__wsRecoveryInstalled = true
+  const KEY = 'ws-decode-recovery'
+
+  // Phase 2 (after a recovery reload): seek back to where playback died.
+  const pending = sessionStorage.getItem(KEY)
+  if (pending) {
+    sessionStorage.removeItem(KEY)
+    try {
+      const saved = JSON.parse(pending)
+      if (Date.now() - saved.at < 120000 && saved.href === location.href) {
+        const trySeek = setInterval(() => {
+          const v = document.querySelector('video')
+          if (v && v.readyState >= 2 && v.duration > 0) {
+            clearInterval(trySeek)
+            if (saved.t > 5 && saved.t < v.duration - 5) v.currentTime = saved.t
+            v.play().catch(() => {})
+            console.log('[workstream] recovered playback at', Math.round(saved.t) + 's')
+          }
+        }, 1000)
+        setTimeout(() => clearInterval(trySeek), 60000)
+      }
+    } catch { /* corrupt state — nothing to recover */ }
+  }
+
+  // Loop guard: at most 3 recoveries per 10 minutes. Returns the recovery
+  // number (1-based) or 0 when the limit is reached.
+  const recoveryNumber = () => {
+    let hist = []
+    try { hist = JSON.parse(sessionStorage.getItem(KEY + '-hist') || '[]') } catch { hist = [] }
+    const now = Date.now()
+    hist = hist.filter((ts) => now - ts < 600000)
+    if (hist.length >= 3) return 0
+    hist.push(now)
+    sessionStorage.setItem(KEY + '-hist', JSON.stringify(hist))
+    return hist.length
+  }
+
+  const recover = (t) => {
+    const n = recoveryNumber()
+    if (!n) {
+      console.log('[ws-decode-error] recovery limit reached, giving up')
+      return
+    }
+    // The main process watches for this exact line; on the 2nd error it
+    // force-transcodes this stream (strips videoCodecs from the playlist
+    // requests) so the recovered playback gets a clean re-encoded stream.
+    console.log('[ws-decode-error] count=' + n + ' at=' + Math.round(t) + 's')
+    // Seek target only when we caught a meaningful position — otherwise let
+    // Stremio's own saved watch position handle the resume.
+    sessionStorage.setItem(
+      KEY,
+      JSON.stringify({ t: t > 5 ? t : 0, href: location.href, at: Date.now() })
+    )
+    setTimeout(() => location.reload(), 800)
+  }
+
+  // Phase 1: hook every video element as the player creates them — and, as a
+  // safety net, scan for elements whose .error is already set (the event can
+  // be missed if the player resets the element first).
+  let recovering = false
+  setInterval(() => {
+    document.querySelectorAll('video').forEach((v) => {
+      if (!v.__wsHooked) {
+        v.__wsHooked = true
+        v.addEventListener('error', () => {
+          // Only recover genuine mid-playback deaths, not load failures.
+          if (recovering || !v.error || v.currentTime < 5) return
+          recovering = true
+          recover(v.currentTime)
+        })
+      }
+      if (!recovering && v.error) {
+        recovering = true
+        recover(v.currentTime)
+      }
+    })
+  }, 2000)
+  console.log('[workstream] decode recovery armed')
+})();`
 
 /** Imperative controls the app uses to pause/resume playback in any media pane. */
 export interface MediaHandle {
@@ -32,6 +126,25 @@ export const StremioPane = forwardRef<MediaHandle>(function StremioPane(_props, 
   const webviewRef = useRef<WebviewElement | null>(null)
   const { status, installRosetta } = useStremioServer()
 
+  // (Re)install the decode-error recovery on every page load — dom-ready
+  // fires per navigation, including our own recovery reloads. Also inject
+  // immediately: the page may already be loaded when this effect attaches
+  // (dom-ready raced the mount, or the renderer hot-reloaded), which would
+  // otherwise leave the player unprotected until the next navigation. The
+  // script self-guards against double installation.
+  useEffect(() => {
+    const wv = webviewRef.current
+    if (!wv) return
+    const inject = (): void => {
+      void wv.executeJavaScript(DECODE_RECOVERY_SCRIPT).catch(() => {
+        // Page not ready / navigating away; the next dom-ready retries.
+      })
+    }
+    wv.addEventListener('dom-ready', inject)
+    inject()
+    return () => wv.removeEventListener('dom-ready', inject)
+  }, [])
+
   useImperativeHandle(ref, () => ({
     pause: () => {
       void webviewRef.current?.executeJavaScript(
@@ -59,7 +172,7 @@ export const StremioPane = forwardRef<MediaHandle>(function StremioPane(_props, 
         ref={webviewRef as never}
         src={STREMIO_URL}
         partition="persist:stremio"
-        allowpopups
+        allowpopups={'true' as unknown as boolean} // string on purpose: react-dom drops boolean true (unknown attr) — see webview.d.ts
         className="media-webview"
       />
       {status.state !== 'ready' && (

@@ -5,11 +5,18 @@
  */
 
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import {
   IPC,
   type InputResponse,
+  type MemoryFile,
+  type MemoryScope,
   type RunEvent,
+  type RunModel,
+  type RunPermissionMode,
   type StartRunOptions,
   type StremioServerStatus
 } from '../shared/types.js'
@@ -21,8 +28,31 @@ import {
   listSessions,
   renameSession
 } from './claude/sessions.js'
-import { cancelRun, endRun, resolveInput, sendMessage, startRun } from './claude/runner.js'
+import {
+  cancelRun,
+  endRun,
+  getAgents,
+  getCommands,
+  getContextUsage,
+  getMcpStatus,
+  reconnectMcpServer,
+  resolveInput,
+  sendMessage,
+  setRunModel,
+  setRunPermissionMode,
+  startRun,
+  stopTask,
+  toggleMcpServer
+} from './claude/runner.js'
 import * as stremioServer from './stremio/server.js'
+import { setAdblock } from './adblock.js'
+
+/** Resolve the CLAUDE.md path for a memory scope (mirrors the CLI's /memory). */
+function memoryPath(scope: MemoryScope, cwd: string): string {
+  if (scope === 'project') return join(cwd, 'CLAUDE.md')
+  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+  return join(configDir, 'CLAUDE.md')
+}
 
 /** Push a status update to every open window (there's only ever one). */
 export function broadcastStremioStatus(status: StremioServerStatus): void {
@@ -85,6 +115,8 @@ export function registerIpcHandlers(): void {
     cancelRun(runId)
   })
 
+  ipcMain.handle(IPC.stopTask, (_event, runId: string, taskId: string) => stopTask(runId, taskId))
+
   ipcMain.handle(IPC.endRun, (_event, runId: string) => {
     endRun(runId)
   })
@@ -92,6 +124,55 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.respondInput, (_event, requestId: string, response: InputResponse) => {
     resolveInput(requestId, response)
   })
+
+  ipcMain.handle(IPC.getContextUsage, (_event, runId: string) => getContextUsage(runId))
+
+  ipcMain.handle(IPC.getMcpStatus, (_event, runId: string) => getMcpStatus(runId))
+
+  ipcMain.handle(IPC.getAgents, (_event, runId: string) => getAgents(runId))
+
+  ipcMain.handle(IPC.getCommands, (_event, runId: string) => getCommands(runId))
+
+  ipcMain.handle(IPC.setRunModel, (_event, runId: string, model: RunModel) =>
+    setRunModel(runId, model)
+  )
+
+  ipcMain.handle(IPC.setRunPermissionMode, (_event, runId: string, mode: RunPermissionMode) =>
+    setRunPermissionMode(runId, mode)
+  )
+
+  ipcMain.handle(IPC.reconnectMcpServer, (_event, runId: string, serverName: string) =>
+    reconnectMcpServer(runId, serverName)
+  )
+
+  ipcMain.handle(
+    IPC.toggleMcpServer,
+    (_event, runId: string, serverName: string, enabled: boolean) =>
+      toggleMcpServer(runId, serverName, enabled)
+  )
+
+  ipcMain.handle(
+    IPC.readMemory,
+    async (_event, scope: MemoryScope, cwd: string): Promise<MemoryFile> => {
+      const path = memoryPath(scope, cwd)
+      const exists = existsSync(path)
+      const content = exists ? await readFile(path, 'utf8') : ''
+      return { scope, path, exists, content }
+    }
+  )
+
+  ipcMain.handle(
+    IPC.writeMemory,
+    async (_event, scope: MemoryScope, cwd: string, content: string) => {
+      const path = memoryPath(scope, cwd)
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, content, 'utf8')
+    }
+  )
+
+  ipcMain.handle(IPC.setAdblock, (_event, enabled: boolean, partitions: string[]) =>
+    setAdblock(enabled, partitions)
+  )
 
   ipcMain.handle(IPC.getStremioServerStatus, () => stremioServer.getStatus())
 

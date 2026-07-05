@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react'
 import type { BackgroundTask } from '../useClaudeRun'
+import { useNow } from '../useNow'
 
 const SNOOZE_OPTIONS: { label: string; ms: number }[] = [
   { label: '5 min', ms: 5 * 60 * 1000 },
@@ -15,8 +16,8 @@ interface WatchdogAlertProps {
   onDismiss: () => void
 }
 
-function formatElapsed(startedAt: number): string {
-  const ms = Date.now() - startedAt
+function formatElapsed(startedAt: number, now: number): string {
+  const ms = now - startedAt
   const s = Math.floor(ms / 1000)
   const m = Math.floor(s / 60)
   const h = Math.floor(m / 60)
@@ -32,6 +33,20 @@ function formatElapsed(startedAt: number): string {
  */
 export function WatchdogAlert({ task, onKill, onSnooze, onDismiss }: WatchdogAlertProps): JSX.Element {
   const [selectedSnooze, setSelectedSnooze] = useState(SNOOZE_OPTIONS[1])
+  const [customMinutes, setCustomMinutes] = useState('')
+  const now = useNow()
+
+  const isCustomSelected = !SNOOZE_OPTIONS.some((opt) => opt.ms === selectedSnooze.ms)
+
+  const applyCustomMinutes = (raw: string): void => {
+    setCustomMinutes(raw)
+    const minutes = Number(raw)
+    // Any positive number works, fractions included (0.5 = 30s) — handy for
+    // testing and for impatient humans.
+    if (Number.isFinite(minutes) && minutes > 0) {
+      setSelectedSnooze({ label: `${minutes} min`, ms: Math.round(minutes * 60 * 1000) })
+    }
+  }
 
   return (
     <div className="watchdog-overlay" role="dialog" aria-modal="true" aria-label="Task watchdog alert">
@@ -54,7 +69,7 @@ export function WatchdogAlert({ task, onKill, onSnooze, onDismiss }: WatchdogAle
               {task.kind === 'process' ? 'Process' : 'Agent'}
             </span>
             <span className="watchdog-task-card__elapsed">
-              running for {formatElapsed(task.startedAt)}
+              running for {formatElapsed(task.startedAt, now)}
             </span>
           </div>
           <p className="watchdog-task-card__desc">{task.description}</p>
@@ -77,6 +92,23 @@ export function WatchdogAlert({ task, onKill, onSnooze, onDismiss }: WatchdogAle
                 {opt.label}
               </button>
             ))}
+            <span
+              className={
+                'watchdog-snooze__btn watchdog-snooze__custom' +
+                (isCustomSelected ? ' watchdog-snooze__btn--selected' : '')
+              }
+            >
+              <input
+                type="number"
+                min={0}
+                step="any"
+                className="watchdog-snooze__custom-input"
+                placeholder="Custom"
+                value={customMinutes}
+                onChange={(e) => applyCustomMinutes(e.target.value)}
+              />
+              min
+            </span>
           </div>
         </div>
 

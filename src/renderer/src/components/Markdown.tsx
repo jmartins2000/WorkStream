@@ -1,4 +1,4 @@
-import { type JSX, type ReactNode } from 'react'
+import { useRef, useState, type JSX, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -24,11 +24,40 @@ function ExternalLink({ href, children }: { href?: string; children?: ReactNode 
   )
 }
 
+/** A fenced code block with a hover copy button. */
+function CodeBlock({ children }: { children?: ReactNode }): JSX.Element {
+  const preRef = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  const copy = (): void => {
+    const text = preRef.current?.textContent ?? ''
+    if (!text) return
+    void navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="code-block">
+      <button
+        type="button"
+        className="code-block__copy"
+        onClick={copy}
+        title="Copy code"
+        aria-label="Copy code"
+      >
+        {copied ? '✓ Copied' : '⧉ Copy'}
+      </button>
+      <pre ref={preRef}>{children}</pre>
+    </div>
+  )
+}
+
 /** Render assistant/user text as GitHub-flavored markdown. */
 export function Markdown({ children }: MarkdownProps): JSX.Element {
   return (
     <div className="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink, pre: CodeBlock }}>
         {children}
       </ReactMarkdown>
     </div>

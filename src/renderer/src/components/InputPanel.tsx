@@ -1,9 +1,57 @@
 import { useState, type JSX } from 'react'
 import type { InputRequest, InputResponse, UiQuestion } from '../../../shared/types'
+import { Markdown } from './Markdown'
 
 interface InputPanelProps {
   request: InputRequest
   onRespond: (response: InputResponse) => void
+}
+
+/**
+ * Plan-mode review (the CLI's ExitPlanMode flow): show the full plan and let
+ * the user approve (optionally with auto-accepted edits) or keep planning.
+ * Approval also flips the live session out of plan mode via `setMode`.
+ */
+function PlanPrompt({
+  plan,
+  onRespond
+}: {
+  plan: string
+  onRespond: (response: InputResponse) => void
+}): JSX.Element {
+  return (
+    <div className="input-panel input-panel--plan">
+      <div className="input-panel__title">Claude has a plan ready</div>
+      <div className="plan-body">
+        <Markdown>{plan}</Markdown>
+      </div>
+      <div className="input-panel__actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => onRespond({ kind: 'permission', decision: 'allow', setMode: 'default' })}
+        >
+          Approve & execute
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() =>
+            onRespond({ kind: 'permission', decision: 'allow', setMode: 'acceptEdits' })
+          }
+        >
+          Approve, auto-accept edits
+        </button>
+        <button
+          type="button"
+          className="btn btn--danger"
+          onClick={() => onRespond({ kind: 'permission', decision: 'deny' })}
+        >
+          Keep planning
+        </button>
+      </div>
+    </div>
+  )
 }
 
 /** Permission approval prompt for a tool Claude wants to run. */
@@ -117,6 +165,7 @@ function QuestionPrompt({
 /** Renders whichever interaction Claude is waiting on. */
 export function InputPanel({ request, onRespond }: InputPanelProps): JSX.Element {
   if (request.kind === 'permission') {
+    if (request.plan) return <PlanPrompt plan={request.plan} onRespond={onRespond} />
     return (
       <PermissionPrompt
         toolName={request.toolName}

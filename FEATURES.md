@@ -37,28 +37,43 @@ Agent SDK. Legend: ✅ done · 🟡 partial · ⬜ planned · 🚫 not applicabl
 - ✅ Background task auto-continue: Bash `run_in_background` keeps the session
   open; the agent resumes and reports when it finishes, and pause-on-finish
   re-fires (pulls you back from Stremio). Shows a "Background task running…" status.
-- ⬜ Mid-run model / mode switch (SDK `setModel`/`setPermissionMode` now reachable)
-- ⬜ Message queuing while running (streaming-input mode)
-- ⬜ Plan mode workflow (present plan → approve → execute)
+- ✅ Mid-run model / mode switch — model & permission mode selectors stay live
+  during a run and call `setModel`/`setPermissionMode` on the streaming query
+  (effort remains start-time-only; the SDK has no mid-run setter for it)
+- ✅ Message queuing while running — send a prompt mid-run and it's pushed into
+  the live streaming session; the agent picks it up at its next loop boundary
+  (CLI-style). Send stays enabled alongside Stop while Claude works.
+- ✅ Plan mode workflow — ExitPlanMode renders a dedicated plan review (full
+  markdown) with Approve & execute / Approve with auto-accept edits / Keep
+  planning; approval flips the live session out of plan mode
+- ✅ Remote Control — settings toggle starts new sessions with the
+  `remoteControlAtStartup` bridge so they appear on claude.ai/code; local
+  command output (e.g. `/remote-control`'s link) now renders in the transcript
 - ⬜ Background tasks panel (`/tasks`) — list/controls view; auto-continue already works
 
 ## Context & cost
 - ✅ Per-run cost + token usage (`/cost`, `/usage`) from the result message
-- ⬜ Context window usage meter (`/context`)
-- ⬜ Compact conversation (`/compact`)
-- ⬜ Memory / CLAUDE.md viewing & editing (`/memory`, `#`)
+- ✅ Context window usage meter (`/context`) — Session panel shows total/max,
+  percentage bar and the per-category breakdown from `getContextUsage()`
+- ✅ Compact conversation (`/compact`) — cockpit-bar button; compact boundaries
+  render as system notes in the transcript
+- ✅ Memory / CLAUDE.md viewing & editing (`/memory`) — modal editor for the
+  project and user files
 
 ## Tools & integrations
 - ✅ All built-in tools run via the SDK (Bash, Read, Edit, Write, Grep, …)
 - ✅ Read-only tools auto-allowed to cut prompt noise
 - ⬜ Todo / task list panel (TaskCreate/TaskList)
-- ⬜ MCP servers status & toggle (`/mcp`)
-- ⬜ Subagents view (`/agents`, Task tool)
-- ⬜ Custom skills / commands surfaced explicitly (`/skills`)
+- 🟡 MCP servers status (`/mcp`) — Session panel lists servers with status,
+  scope, tool counts and errors; per-server toggle/auth still pending
+- ✅ Subagents view (`/agents`) — Session panel lists available agents
+- ✅ Custom skills / commands surfaced explicitly (`/skills`) — Session panel
+  lists every command with description + argument hint, filterable
 - ⬜ Hooks (settings-driven)
 
 ## Config & UX
-- ⬜ Settings panel (`/config`: theme, defaults, output style)
+- ✅ Settings panel (`/config`) — theme, default model/effort/permission mode
+  for new conversations, remote-control toggle, watchdog timing
 - ⬜ Permission rules editor (`/permissions`)
 - ⬜ Checkpoints / rewind (`/rewind`)
 - 🟡 Keyboard shortcuts (Esc interrupts a run; more planned)

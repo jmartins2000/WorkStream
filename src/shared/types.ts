@@ -82,12 +82,25 @@ export interface UiQuestion {
 /** Something Claude needs from the user mid-run: an answer or an approval. */
 export type InputRequest =
   | { kind: 'question'; requestId: string; questions: UiQuestion[] }
-  | { kind: 'permission'; requestId: string; toolName: string; detail: string }
+  | {
+      kind: 'permission'
+      requestId: string
+      toolName: string
+      detail: string
+      /** Full plan markdown when the request is ExitPlanMode (plan-mode review). */
+      plan?: string
+    }
 
 /** The user's reply to an InputRequest, sent back to the runner. */
 export type InputResponse =
   | { kind: 'question'; answers: Record<string, string> }
-  | { kind: 'permission'; decision: 'allow' | 'allow-always' | 'deny' }
+  | {
+      kind: 'permission'
+      decision: 'allow' | 'allow-always' | 'deny'
+      /** Renderer-side: flip the live session to this mode after replying
+       *  (plan approval switches out of plan mode, like the CLI). */
+      setMode?: RunPermissionMode
+    }
 
 /** Streaming events emitted while a query runs, pushed to the renderer. */
 export type RunEvent =
@@ -156,6 +169,8 @@ export interface StartRunOptions {
   resumeSessionId?: string
   /** Per-run model / effort / permission settings. */
   settings?: RunSettings
+  /** Start the Remote Control bridge so the session appears on claude.ai/code. */
+  remoteControl?: boolean
 }
 
 /** Cost and token usage reported at the end of a run. */
@@ -168,6 +183,60 @@ export interface RunUsage {
 
 export interface StartRunResult {
   runId: string
+}
+
+/** One category of the context-window breakdown (system prompt, tools, messages…). */
+export interface ContextCategory {
+  name: string
+  tokens: number
+}
+
+/** Context-window usage for the live session (the /context data). */
+export interface ContextUsage {
+  totalTokens: number
+  maxTokens: number
+  /** 0–100. */
+  percentage: number
+  model: string
+  categories: ContextCategory[]
+}
+
+/** Status of one configured MCP server (the /mcp data). */
+export interface McpServerInfo {
+  name: string
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled'
+  /** Error message when status is 'failed'. */
+  error?: string
+  /** Config scope (project, user, local…). */
+  scope?: string
+  /** Tool names provided by this server, when connected. */
+  tools: string[]
+}
+
+/** An available subagent (the /agents data). */
+export interface AgentSummary {
+  name: string
+  description: string
+  model?: string
+}
+
+/** An available slash command / skill with its description (the /skills data). */
+export interface CommandSummary {
+  name: string
+  description: string
+  argumentHint?: string
+}
+
+/** Which CLAUDE.md a memory operation targets. */
+export type MemoryScope = 'project' | 'user'
+
+/** A memory (CLAUDE.md) file's location and content. */
+export interface MemoryFile {
+  scope: MemoryScope
+  /** Absolute path of the file (whether or not it exists yet). */
+  path: string
+  exists: boolean
+  content: string
 }
 
 /**
@@ -201,12 +270,37 @@ export interface ClaudeBridge {
   sendMessage(runId: string, prompt: string): Promise<void>
   /** Interrupt the current turn without ending the session. */
   cancelRun(runId: string): Promise<void>
+  /** Stop a single background task (shell or subagent) without interrupting
+   *  the rest of the session. */
+  stopTask(runId: string, taskId: string): Promise<void>
   /** Fully end a streaming session (tear down the query). */
   endRun(runId: string): Promise<void>
   /** Reply to a mid-run InputRequest (question answer or permission decision). */
   respondInput(requestId: string, response: InputResponse): Promise<void>
+  /** Context-window usage of the live session (/context). Null when the session is gone. */
+  getContextUsage(runId: string): Promise<ContextUsage | null>
+  /** MCP server statuses of the live session (/mcp). Null when the session is gone. */
+  getMcpStatus(runId: string): Promise<McpServerInfo[] | null>
+  /** Available subagents of the live session (/agents). Null when the session is gone. */
+  getAgents(runId: string): Promise<AgentSummary[] | null>
+  /** Available commands/skills of the live session (/skills). Null when the session is gone. */
+  getCommands(runId: string): Promise<CommandSummary[] | null>
+  /** Switch the live session's model mid-run (SDK setModel). */
+  setRunModel(runId: string, model: RunModel): Promise<void>
+  /** Switch the live session's permission mode mid-run (SDK setPermissionMode). */
+  setRunPermissionMode(runId: string, mode: RunPermissionMode): Promise<void>
+  /** Reconnect an MCP server on the live session. Rejects on failure. */
+  reconnectMcpServer(runId: string, serverName: string): Promise<void>
+  /** Enable/disable an MCP server on the live session. Rejects on failure. */
+  toggleMcpServer(runId: string, serverName: string, enabled: boolean): Promise<void>
+  /** Read a CLAUDE.md memory file (project scope needs the cwd). */
+  readMemory(scope: MemoryScope, cwd: string): Promise<MemoryFile>
+  /** Write a CLAUDE.md memory file (creates it if missing). */
+  writeMemory(scope: MemoryScope, cwd: string, content: string): Promise<void>
   /** Subscribe to streaming run events. Returns an unsubscribe function. */
   onRunEvent(listener: (event: RunEvent) => void): () => void
+  /** Enable/disable ad & tracker blocking on the given webview partitions. */
+  setAdblock(enabled: boolean, partitions: string[]): Promise<void>
   /** Current state of the local Stremio streaming server. */
   getStremioServerStatus(): Promise<StremioServerStatus>
   /** Trigger the one-time Rosetta 2 install (Apple Silicon only; prompts for admin password). */
@@ -226,9 +320,21 @@ export const IPC = {
   startRun: 'claude:startRun',
   sendMessage: 'claude:sendMessage',
   cancelRun: 'claude:cancelRun',
+  stopTask: 'claude:stopTask',
   endRun: 'claude:endRun',
   respondInput: 'claude:respondInput',
+  getContextUsage: 'claude:getContextUsage',
+  getMcpStatus: 'claude:getMcpStatus',
+  getAgents: 'claude:getAgents',
+  getCommands: 'claude:getCommands',
+  setRunModel: 'claude:setRunModel',
+  setRunPermissionMode: 'claude:setRunPermissionMode',
+  reconnectMcpServer: 'claude:reconnectMcpServer',
+  toggleMcpServer: 'claude:toggleMcpServer',
+  readMemory: 'claude:readMemory',
+  writeMemory: 'claude:writeMemory',
   runEvent: 'claude:runEvent',
+  setAdblock: 'app:setAdblock',
   getStremioServerStatus: 'stremio:getServerStatus',
   installRosetta: 'stremio:installRosetta',
   stremioServerStatus: 'stremio:serverStatus'
