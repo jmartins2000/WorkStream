@@ -13,21 +13,31 @@ interface SitePaneProps {
 
 /**
  * YouTube in-player ads can't be removed by network filtering — they're
- * stitched into the player's own stream. Real ad blockers beat them with
- * in-page JS; this is our version: when the player enters ad state, mute,
- * jump to the ad's end, and click Skip the moment it appears. Worst case an
- * ad flashes for a second instead of playing out.
+ * stitched into the player's own stream. This helper mutes ads and clicks
+ * Skip/close the moment those buttons appear. An earlier version also seeked
+ * the ad to its end at 16× — that WEDGED playback entirely when the ad
+ * request was blocked upstream (player stuck in ad state while we hammered
+ * the shared <video> element), so: buttons and mute only.
  */
 const YT_AD_SKIP_SCRIPT = `(() => {
   if (window.__wsAdSkipInstalled) return
   window.__wsAdSkipInstalled = true
+  // Deliberately conservative: mute the ad and click Skip/close buttons.
+  // NO seeking and NO playbackRate games — mutating the player's single
+  // <video> element while YouTube is (or thinks it is) in ad state also
+  // sabotages the upcoming content video and can wedge playback entirely.
+  let mutedByUs = false
   setInterval(() => {
-    const ad = document.querySelector('.ad-showing video, .ad-interrupting video')
-    if (ad) {
-      ad.muted = true
-      ad.playbackRate = 16
-      if (Number.isFinite(ad.duration) && ad.duration > 0) {
-        try { ad.currentTime = ad.duration } catch { /* not seekable yet */ }
+    const player = document.querySelector('.html5-video-player')
+    const video = player ? player.querySelector('video') : null
+    const inAd = !!(player && player.classList.contains('ad-showing'))
+    if (video) {
+      if (inAd && !video.muted) {
+        video.muted = true
+        mutedByUs = true
+      } else if (!inAd && mutedByUs) {
+        video.muted = false
+        mutedByUs = false
       }
     }
     const skip = document.querySelector(
@@ -37,7 +47,7 @@ const YT_AD_SKIP_SCRIPT = `(() => {
     const overlayClose = document.querySelector('.ytp-ad-overlay-close-button')
     if (overlayClose) overlayClose.click()
   }, 500)
-  console.log('[workstream] youtube ad auto-skip armed')
+  console.log('[workstream] youtube ad auto-skip armed (conservative)')
 })();`
 
 function isYouTube(url: string): boolean {
@@ -79,12 +89,12 @@ export const SitePane = forwardRef<MediaHandle, SitePaneProps>(function SitePane
     pause: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { document.querySelectorAll('video, audio').forEach(v => v.pause()); })();`
-      )
+      ).catch(() => {})
     },
     play: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { const v = document.querySelector('video, audio'); if (v) v.play(); })();`
-      )
+      ).catch(() => {})
     },
     reload: () => webviewRef.current?.reload(),
     exitFullscreen: async () => {

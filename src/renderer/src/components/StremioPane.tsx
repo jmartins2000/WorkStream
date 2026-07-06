@@ -149,12 +149,12 @@ export const StremioPane = forwardRef<MediaHandle>(function StremioPane(_props, 
     pause: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { document.querySelectorAll('video').forEach(v => v.pause()); })();`
-      )
+      ).catch(() => {})
     },
     play: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { const v = document.querySelector('video'); if (v) v.play(); })();`
-      )
+      ).catch(() => {})
     },
     reload: () => webviewRef.current?.reload(),
     exitFullscreen: async () => {
