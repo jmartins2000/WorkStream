@@ -127,6 +127,9 @@ body {
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text);
+  /* Newsreader rides high on its line box — nudge to true optical center. */
+  position: relative;
+  top: 1.5px;
 }
 
 .topbar__status {
