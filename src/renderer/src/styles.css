@@ -101,7 +101,8 @@ body {
 .topbar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Tight: the icon's canvas has built-in padding around the squircle. */
+  gap: 3px;
 }
 
 .topbar__logo {
