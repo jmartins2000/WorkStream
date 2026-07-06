@@ -178,7 +178,7 @@ export function App(): JSX.Element {
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <span className="topbar__logo">◇</span>
+          <span className="topbar__logo">◆</span>
           <span className="topbar__name">WorkStream</span>
         </div>
 

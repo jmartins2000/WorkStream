@@ -1,26 +1,26 @@
 <svg width="100%" height="100%" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Inverted: near-black canvas, white diamond, dark play triangle. -->
+    <!-- Same whisper-of-depth shading as the original, in neutral monochrome. -->
     <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1D1D1D"/>
-      <stop offset="1" stop-color="#0A0A0A"/>
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#ECECEC"/>
     </linearGradient>
     <linearGradient id="diamondGradient" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E2E2E2"/>
+      <stop offset="0" stop-color="#2E2E2E"/>
+      <stop offset="1" stop-color="#0E0E0E"/>
     </linearGradient>
   </defs>
 
-  <!-- near-black canvas (macOS-style rounded squircle, ~80% inset) -->
+  <!-- white canvas (macOS-style rounded squircle, ~80% inset) -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bgGradient)"/>
 
-  <!-- white diamond (rotated square), rounded corners -->
+  <!-- black diamond (rotated square), rounded corners -->
   <rect x="239" y="239" width="546" height="546" rx="76"
         fill="url(#diamondGradient)"
         transform="rotate(45 512 512)"/>
 
-  <!-- dark play triangle, optically centered (nudged right); flat. -->
+  <!-- white play triangle, optically centered (nudged right); flat. -->
   <path d="M 458 373 L 458 651 L 679 512 Z"
-        fill="#111111"
+        fill="#FAFAFA"
         stroke-linejoin="round" stroke-linecap="round"/>
 </svg>
