@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import type { RunSettings } from '../../../shared/types'
 import type { MediaTabConfig } from '../useSettings'
 import { RunSettingsBar } from './RunSettings'
@@ -58,6 +58,11 @@ export function SettingsPanel({
   onCodexEnabledChange,
   onClose
 }: SettingsPanelProps): JSX.Element {
+  const [appVersion, setAppVersion] = useState('')
+  useEffect(() => {
+    void window.claude.getAppVersion().then(setAppVersion)
+  }, [])
+
   const [newLabel, setNewLabel] = useState('')
   const [newUrl, setNewUrl] = useState('')
 
@@ -314,6 +319,8 @@ export function SettingsPanel({
               </div>
             </div>
           </section>
+
+          {appVersion && <p className="settings-version">WorkStream {appVersion}</p>}
         </div>
       </aside>
     </>

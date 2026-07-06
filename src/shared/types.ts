@@ -371,6 +371,8 @@ export interface ClaudeBridge {
   setAdblock(enabled: boolean, partitions: string[]): Promise<void>
   /** Native folder picker; returns the chosen absolute path or null. */
   pickFolder(): Promise<string | null>
+  /** Display version string (e.g. "v0.1.0 · build 54"). */
+  getAppVersion(): Promise<string>
   /** Check GitHub for a newer build (read-only; never throws). */
   checkForUpdate(): Promise<UpdateStatus>
   /** Start the self-update (rebuild + relaunch); quits the app on success. */
@@ -432,6 +434,7 @@ export const IPC = {
   runEvent: 'claude:runEvent',
   setAdblock: 'app:setAdblock',
   pickFolder: 'app:pickFolder',
+  getAppVersion: 'app:getAppVersion',
   checkForUpdate: 'app:checkForUpdate',
   performUpdate: 'app:performUpdate',
   codexInstalled: 'codex:installed',
