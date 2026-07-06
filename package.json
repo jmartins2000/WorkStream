@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "dev:test": "VITE_UNLOCK_MEDIA=1 electron-vite dev",
     "dev:debug": "VITE_UNLOCK_MEDIA=1 STREMIO_DEBUG=1 electron-vite dev",
-    "build": "npm run typecheck && electron-vite build",
+    "build": "npm run typecheck && node scripts/write-build-info.mjs && electron-vite build",
     "start": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx",
     "package": "npm run build && electron-builder --mac",
+    "package:local": "npm run build && electron-builder --mac --dir",
     "fetch:stremio": "node scripts/fetch-stremio-service.mjs",
     "postinstall": "node scripts/fetch-stremio-service.mjs"
   },

@@ -12,6 +12,10 @@ extraResources:
   # own desktop client. Lands at Contents/Resources/stremio-service.
   - from: resources/stremio-service
     to: stremio-service
+  # Commit/timestamp the app was built from — the update checker reads this to
+  # compare against the GitHub remote. Lands at Contents/Resources/build-info.json.
+  - from: build-info.json
+    to: build-info.json
 mac:
   category: public.app-category.entertainment
   icon: build/icon.icns
@@ -20,3 +24,8 @@ mac:
     - zip
   # Enable hardened runtime; signing/notarization are configured at release time.
   hardenedRuntime: true
+  # Self-update model (option C) builds the .app locally and unsigned — macOS
+  # doesn't quarantine locally-built apps, so no Gatekeeper prompt. `null`
+  # explicitly skips code signing so `package:local` never fails looking for a
+  # certificate. (Set a real identity here when release signing is added.)
+  identity: null

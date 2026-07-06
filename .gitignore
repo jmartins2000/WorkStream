@@ -9,3 +9,4 @@ tsconfig.tsbuildinfo
 *.tsbuildinfo
 # Fetched by scripts/fetch-stremio-service.mjs; not committed (~150MB, see CLAUDE.md).
 resources/stremio-service/
+build-info.json

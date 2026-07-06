@@ -6,10 +6,12 @@ import { SettingsPanel } from './components/SettingsPanel'
 import type { MediaHandle } from './components/StremioPane'
 import { StremioPane } from './components/StremioPane'
 import { SitePane } from './components/SitePane'
+import { UpdateBanner } from './components/UpdateBanner'
 import { useClaudeRun } from './useClaudeRun'
 import { useCodexRun } from './useCodexRun'
 import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
+import { useUpdate } from './useUpdate'
 import logoUrl from './assets/icon.png'
 import logoMarkUrl from './assets/icon-mark.png'
 
@@ -30,6 +32,7 @@ export function App(): JSX.Element {
   const [lastMediaView, setLastMediaView] = useState<string>('stremio')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { theme, toggle } = useTheme()
+  const update = useUpdate()
   const {
     settings,
     setWatchdogMs,
@@ -178,6 +181,7 @@ export function App(): JSX.Element {
 
   return (
     <div className="app">
+      <UpdateBanner update={update} />
       <header className="topbar">
         <div className="topbar__brand">
           {/* Dark mode drops the black squircle (it vanishes into the bar)

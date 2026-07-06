@@ -82,6 +82,79 @@ body {
   height: 100%;
 }
 
+/* ---- Update banner ---- */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.update-banner__text {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.update-banner__detail {
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.update-banner__text--error {
+  font-weight: 500;
+}
+
+.update-banner__btn {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--on-accent) 45%, transparent);
+  background: transparent;
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.update-banner__btn:hover {
+  background: color-mix(in srgb, var(--on-accent) 15%, transparent);
+}
+
+.update-banner__btn--primary {
+  background: var(--on-accent);
+  color: var(--accent);
+  border-color: var(--on-accent);
+}
+
+.update-banner__spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 40%, transparent);
+  border-top-color: var(--on-accent);
+  border-radius: 50%;
+  animation: update-spin 0.7s linear infinite;
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+
+@keyframes update-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---- Top bar ---- */
 .topbar {
   display: flex;

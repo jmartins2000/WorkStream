@@ -79,7 +79,34 @@ Nothing is locked into WorkStream; it's a window onto the same conversations, no
 - **Claude Code** — the app reuses your existing `~/.claude` login
 - **Codex** (optional) — install the [Codex app](https://developers.openai.com/codex/app) or `npm i -g @openai/codex`, and sign in with a ChatGPT (Plus/Pro) account or API key. Only needed if you use the Codex tab.
 
-## Build from source
+## Install
+
+One command. It clones WorkStream into `~/.workstream`, builds a real
+`WorkStream.app`, and drops it in your Applications folder:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmartins2000/WorkStream/main/scripts/install.sh | bash
+```
+
+Then open WorkStream from Applications or Spotlight like any other app.
+
+Because the app is **built on your machine** (not downloaded as a finished
+binary), macOS doesn't quarantine it — so there's no "unidentified developer"
+warning, even though it isn't code-signed.
+
+**Prerequisites:** the installer checks for them, but you'll want Node.js 22+,
+git, and the Xcode Command Line Tools (`xcode-select --install`) in place. The
+first build also downloads the ~150MB Stremio engine.
+
+## Updating
+
+WorkStream checks GitHub for new commits shortly after launch. When there are
+some, a banner offers **Later** or **Update**. Clicking Update pulls the latest
+code, rebuilds the app, and relaunches — a couple of minutes, all in the
+background. If a build ever fails, it rolls back to the previous working version
+automatically.
+
+## Develop from source
 
 ```bash
 git clone https://github.com/jmartins2000/WorkStream.git
@@ -93,7 +120,8 @@ npm run typecheck  # tsc for both Node and renderer configs
 npm test           # vitest unit + integration tests
 npm run lint       # eslint
 npm run build      # production build → ./out
-npm run package    # electron-builder → ./release (.dmg + .zip)
+npm run package:local  # build an unsigned WorkStream.app → ./release (what the installer uses)
+npm run package    # signed .dmg + .zip (release builds; needs signing config)
 ```
 
 ## Project layout
@@ -106,7 +134,9 @@ npm run package    # electron-builder → ./release (.dmg + .zip)
 | `src/main/adblock.ts` | Network-level ad & tracker blocking |
 | `src/preload/` | `contextBridge` exposing a typed `window.claude` API |
 | `src/renderer/` | React UI — Claude & Codex cockpits, Stremio / YouTube / Browser / custom panes |
+| `src/main/update/` | Self-update: GitHub commit check + rebuild trigger |
 | `src/shared/types.ts` | Types and IPC channel names shared across all three processes |
+| `scripts/` | Stremio fetch, icon render, `install.sh` / `update.sh` |
 | `docs/` | Design notes (Codex integration map, investigations) |
 
 ## License
