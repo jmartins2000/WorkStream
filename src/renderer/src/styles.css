@@ -91,7 +91,7 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ---- Update banner ---- */
+/* ---- Update banner (sits at the very bottom of the window) ---- */
 .update-banner {
   display: flex;
   align-items: center;
@@ -101,6 +101,7 @@ body {
   color: var(--on-accent);
   font-size: 13px;
   flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, var(--on-accent) 20%, transparent);
   -webkit-app-region: no-drag;
 }
 

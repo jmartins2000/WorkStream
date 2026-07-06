@@ -181,7 +181,6 @@ export function App(): JSX.Element {
 
   return (
     <div className="app">
-      <UpdateBanner update={update} />
       <header className="topbar">
         <div className="topbar__brand">
           {/* Dark mode drops the black squircle (it vanishes into the bar)
@@ -332,6 +331,7 @@ export function App(): JSX.Element {
           />
         )}
       </main>
+      <UpdateBanner update={update} />
     </div>
   )
 }
