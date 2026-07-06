@@ -13,8 +13,19 @@
 
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { app, session } from 'electron'
+import { app, ipcMain, session } from 'electron'
 import { ElectronBlocker } from '@ghostery/adblocker-electron'
+
+/**
+ * enableBlockingInSession registers these ipcMain handlers GLOBALLY on every
+ * call — enabling a second session throws "Attempted to register a second
+ * handler". The handlers are identical (bound to the same blocker), so we
+ * drop them before each enable and let the call re-register.
+ */
+const GHOSTERY_IPC_CHANNELS = [
+  '@ghostery/adblocker/inject-cosmetic-filters',
+  '@ghostery/adblocker/is-mutation-observer-enabled'
+]
 
 let blockerPromise: Promise<ElectronBlocker> | null = null
 /** Partitions blocking is currently enabled on. */
@@ -22,12 +33,22 @@ const enabledPartitions = new Set<string>()
 
 function getBlocker(): Promise<ElectronBlocker> {
   if (!blockerPromise) {
-    // "Full" = ads + tracking + annoyances lists, including the scriptlet
-    // filters that matter for YouTube's in-player ads.
-    blockerPromise = ElectronBlocker.fromPrebuiltFull(fetch, {
-      path: join(app.getPath('userData'), 'adblocker-engine-full.bin'),
+    // Ads+tracking lists only. The "full" bundle (annoyances + uBlock extras)
+    // BROKE YouTube playback: it carries redirect-style rules this engine can
+    // only hard-block, starving the player of requests it needs ("video never
+    // loads"). Network-level ads+tracking is the well-tested baseline.
+    blockerPromise = ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+      path: join(app.getPath('userData'), 'adblocker-engine.bin'),
       read: fs.readFile,
       write: fs.writeFile
+    }).then((blocker) => {
+      // Cosmetic injection never worked inside webview guests (its
+      // ipcRenderer round-trip rejects in every guest — the 3 unhandled
+      // rejections in the startup log) — disable it and keep the network
+      // layer, which is what actually blocks. The property is typed readonly
+      // but is a plain field the enable path consults at runtime.
+      ;(blocker.config as { loadCosmeticFilters: boolean }).loadCosmeticFilters = false
+      return blocker
     })
   }
   return blockerPromise
@@ -44,14 +65,24 @@ export async function setAdblock(enabled: boolean, partitions: string[]): Promis
 
     for (const partition of [...enabledPartitions]) {
       if (!wanted.has(partition)) {
-        blocker.disableBlockingInSession(session.fromPartition(partition))
+        try {
+          blocker.disableBlockingInSession(session.fromPartition(partition))
+        } catch (err) {
+          console.warn(`[adblock] disable failed for ${partition}:`, err)
+        }
         enabledPartitions.delete(partition)
       }
     }
     for (const partition of wanted) {
       if (!enabledPartitions.has(partition)) {
-        blocker.enableBlockingInSession(session.fromPartition(partition))
-        enabledPartitions.add(partition)
+        try {
+          for (const channel of GHOSTERY_IPC_CHANNELS) ipcMain.removeHandler(channel)
+          blocker.enableBlockingInSession(session.fromPartition(partition))
+          enabledPartitions.add(partition)
+        } catch (err) {
+          // Isolate per-partition failures — the rest must still enable.
+          console.warn(`[adblock] enable failed for ${partition}:`, err)
+        }
       }
     }
     console.log(

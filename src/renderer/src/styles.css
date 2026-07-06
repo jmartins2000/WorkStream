@@ -101,20 +101,24 @@ body {
 .topbar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Tight: the icon's canvas has built-in padding around the squircle. */
+  gap: 3px;
 }
 
 .topbar__logo {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--on-accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
+  /* The actual app icon (its squircle is inset ~80% in the canvas, so the
+     image runs a bit larger than the old 26px chip to read the same size). */
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+}
+
+/* Bare mark (dark mode): the diamond fills its canvas, so render smaller to
+   keep the same optical size as the squircle version. */
+.topbar__logo--mark {
+  width: 24px;
+  height: 24px;
+  margin: 0 5px;
 }
 
 .topbar__name {
@@ -123,12 +127,16 @@ body {
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text);
+  /* Newsreader rides high on its line box — nudge to true optical center. */
+  position: relative;
+  top: 1.5px;
 }
 
 .topbar__status {
   flex: 1;
   display: flex;
   justify-content: center;
+  gap: 8px; /* both agents can show a pill at once */
 }
 
 .status {
@@ -1173,6 +1181,892 @@ body {
   border-color: var(--accent);
 }
 
+/* ============================================================================
+   Codex tab — self-contained theme modeled on the Codex desktop app:
+   monochrome near-black, white-primary buttons, terminal-styled commands,
+   three panes (threads | conversation | diff). Deliberately independent of
+   the app's kiln theme and of light/dark mode.
+   ========================================================================== */
+.codex-root {
+  /* Scoped palette */
+  --cx-bg: #0d0d0d;
+  --cx-panel: #161616;
+  --cx-elev: #1e1e1e;
+  --cx-border: #2b2b2b;
+  --cx-text: #ececec;
+  --cx-dim: #9a9a9a;
+  --cx-faint: #5c5c5c;
+  --cx-white: #ffffff;
+  --cx-danger: #f85149;
+  --cx-green: #3fb950;
+
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: var(--cx-bg);
+  color: var(--cx-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+/* ---- Gate screens ---- */
+.cx-gate {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 40px;
+}
+
+.cx-gate__logo {
+  font-size: 34px;
+  color: var(--cx-white);
+}
+
+.cx-gate__title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--cx-white);
+}
+
+.cx-gate__text {
+  margin: 0;
+  max-width: 400px;
+  color: var(--cx-dim);
+  line-height: 1.5;
+}
+
+.cx-gate__text code {
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+.cx-gate__error {
+  color: var(--cx-danger);
+  font-size: 12px;
+  max-width: 400px;
+}
+
+/* ---- Buttons ---- */
+.cx-btn {
+  border: 1px solid var(--cx-border);
+  background: var(--cx-elev);
+  color: var(--cx-text);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cx-btn--primary {
+  background: var(--cx-white);
+  border-color: var(--cx-white);
+  color: #000;
+}
+
+.cx-btn--danger {
+  color: var(--cx-danger);
+  border-color: color-mix(in srgb, var(--cx-danger) 40%, transparent);
+}
+
+.cx-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Sidebar (threads) ---- */
+.cx-sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 10px;
+  background: var(--cx-panel);
+  border-right: 1px solid var(--cx-border);
+}
+
+.cx-project-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cx-project {
+  flex: 1;
+  min-width: 0;
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  color: var(--cx-text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.cx-project--empty {
+  color: var(--cx-faint);
+}
+
+.cx-project-pick {
+  flex-shrink: 0;
+  width: 32px;
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  color: var(--cx-dim);
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cx-project-pick:hover {
+  color: var(--cx-text);
+}
+
+.cx-cwd {
+  font-size: 10.5px;
+  color: var(--cx-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+.cx-newthread {
+  background: transparent;
+  border: 1px dashed var(--cx-border);
+  color: var(--cx-dim);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cx-newthread:hover {
+  color: var(--cx-text);
+  border-color: var(--cx-dim);
+}
+
+.cx-threads {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.cx-thread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--cx-dim);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.cx-thread:hover {
+  background: var(--cx-elev);
+  color: var(--cx-text);
+}
+
+.cx-thread--active {
+  background: var(--cx-elev);
+  color: var(--cx-white);
+}
+
+.cx-thread__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-thread__time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--cx-faint);
+}
+
+.cx-threads__empty {
+  color: var(--cx-faint);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.cx-thread-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.cx-thread-group__name {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cx-faint);
+  padding: 4px 10px 2px;
+}
+
+.cx-plan-warning {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #d6a95a;
+  background: color-mix(in srgb, #d6a95a 10%, transparent);
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+
+/* ---- Main conversation pane ---- */
+.cx-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--cx-border);
+}
+
+.cx-header__title {
+  font-weight: 600;
+  color: var(--cx-white);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cx-header__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cx-header__usage {
+  font-size: 11px;
+  color: var(--cx-faint);
+}
+
+.cx-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cx-dim);
+  border: 1px solid var(--cx-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: transparent;
+}
+
+.cx-badge--button {
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cx-badge--on {
+  background: var(--cx-white);
+  border-color: var(--cx-white);
+  color: #000;
+}
+
+/* ---- Transcript ---- */
+.cx-transcript {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cx-transcript--empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--cx-faint);
+  font-size: 15px;
+}
+
+.cx-msg {
+  max-width: 760px;
+  width: 100%;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cx-msg--user {
+  align-items: flex-end;
+}
+
+.cx-user-bubble {
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  color: var(--cx-text);
+  border-radius: 14px 14px 4px 14px;
+  padding: 10px 14px;
+  max-width: 540px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cx-agent-text {
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.cx-agent-text--streaming {
+  white-space: pre-wrap;
+}
+
+/* markdown inside codex keeps the monochrome look */
+.codex-root .markdown code {
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+}
+
+.codex-root .markdown pre {
+  background: var(--cx-panel);
+  border: 1px solid var(--cx-border);
+}
+
+.codex-root .markdown a {
+  color: var(--cx-white);
+  text-decoration: underline;
+}
+
+.codex-root .code-block__copy {
+  background: var(--cx-elev);
+  border-color: var(--cx-border);
+  color: var(--cx-dim);
+}
+
+/* Reasoning */
+.cx-reasoning__toggle {
+  background: none;
+  border: none;
+  color: var(--cx-faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cx-reasoning__toggle:hover {
+  color: var(--cx-dim);
+}
+
+.cx-reasoning__body {
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--cx-border);
+  color: var(--cx-dim);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* Command blocks (terminal style) */
+.cx-command {
+  background: #000;
+  border: 1px solid var(--cx-border);
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.cx-command--error {
+  border-color: color-mix(in srgb, var(--cx-danger) 45%, transparent);
+}
+
+.cx-command__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--cx-text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.cx-command__prompt {
+  color: var(--cx-green);
+  flex-shrink: 0;
+}
+
+.cx-command__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-command__caret {
+  color: var(--cx-faint);
+  flex-shrink: 0;
+}
+
+.cx-command__output {
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--cx-border);
+  color: var(--cx-dim);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* File change cards */
+.cx-filechange {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--cx-panel);
+  border: 1px solid var(--cx-border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--cx-dim);
+}
+
+.cx-filechange--error {
+  border-color: color-mix(in srgb, var(--cx-danger) 45%, transparent);
+}
+
+.cx-filechange__icon {
+  color: var(--cx-green);
+  font-weight: 700;
+}
+
+.cx-toolnote {
+  color: var(--cx-faint);
+  font-size: 12px;
+}
+
+.cx-toolnote__detail {
+  color: var(--cx-dim);
+  font-family: var(--mono);
+}
+
+/* Plan card */
+.cx-plan {
+  max-width: 760px;
+  width: 100%;
+  align-self: center;
+  background: var(--cx-panel);
+  border: 1px solid var(--cx-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.cx-plan__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--cx-faint);
+  margin-bottom: 8px;
+}
+
+.cx-plan__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cx-plan__step {
+  display: flex;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--cx-dim);
+}
+
+.cx-plan__step--completed {
+  color: var(--cx-faint);
+  text-decoration: line-through;
+}
+
+.cx-plan__step--inProgress {
+  color: var(--cx-white);
+}
+
+.cx-plan__mark {
+  flex-shrink: 0;
+  width: 14px;
+  color: var(--cx-green);
+}
+
+/* Working indicator */
+.cx-working {
+  align-self: center;
+  color: var(--cx-faint);
+  font-size: 13px;
+  animation: cx-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cx-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Inline approval card */
+.cx-approval {
+  max-width: 760px;
+  width: 100%;
+  align-self: center;
+  background: var(--cx-panel);
+  border: 1px solid var(--cx-white);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cx-approval__title {
+  font-weight: 600;
+  color: var(--cx-white);
+}
+
+.cx-approval__detail {
+  display: block;
+  background: #000;
+  border: 1px solid var(--cx-border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--cx-text);
+  word-break: break-all;
+}
+
+.cx-approval__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cx-approval__actions .cx-btn {
+  flex: 1;
+  padding: 8px 10px;
+}
+
+.cx-approval__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cx-option {
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  border-radius: 9px;
+  padding: 9px 12px;
+  color: var(--cx-text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cx-option--selected {
+  border-color: var(--cx-white);
+}
+
+.cx-option__desc {
+  color: var(--cx-dim);
+  font-size: 12px;
+}
+
+/* Error banner */
+.cx-error {
+  margin: 0 24px 8px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cx-danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cx-danger) 35%, transparent);
+  color: var(--cx-danger);
+  font-size: 12.5px;
+}
+
+/* ---- Composer ---- */
+.cx-composer {
+  margin: 8px 24px 18px;
+  max-width: 760px;
+  width: calc(100% - 48px);
+  align-self: center;
+  background: var(--cx-panel);
+  border: 1px solid var(--cx-border);
+  border-radius: 16px;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cx-composer:focus-within {
+  border-color: var(--cx-dim);
+}
+
+.cx-composer__input {
+  background: transparent;
+  border: none;
+  color: var(--cx-text);
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+}
+
+.cx-composer__input:focus {
+  outline: none;
+}
+
+.cx-composer__input::placeholder {
+  color: var(--cx-faint);
+}
+
+.cx-composer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cx-composer__pills {
+  display: flex;
+  gap: 6px;
+}
+
+.cx-pill {
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  color: var(--cx-dim);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.cx-pill:hover {
+  color: var(--cx-text);
+}
+
+.cx-send {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--cx-white);
+  color: #000;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cx-send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cx-send--stop {
+  background: var(--cx-elev);
+  color: var(--cx-danger);
+  border: 1px solid var(--cx-border);
+  font-size: 11px;
+}
+
+/* ---- Diff pane ---- */
+.cx-diffpane {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cx-panel);
+  border-left: 1px solid var(--cx-border);
+  min-width: 0;
+}
+
+.cx-diffpane__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cx-border);
+}
+
+.cx-diffpane__title {
+  font-weight: 600;
+  color: var(--cx-white);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cx-diffpane__totals {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cx-faint);
+}
+
+.cx-diffpane__close {
+  background: none;
+  border: none;
+  color: var(--cx-faint);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.cx-diffpane__close:hover {
+  color: var(--cx-text);
+}
+
+.cx-diffpane__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cx-diffpane__empty {
+  color: var(--cx-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.cx-diff-file {
+  border: 1px solid var(--cx-border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.cx-diff-file__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: var(--cx-elev);
+  border: none;
+  color: var(--cx-text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.cx-diff-file__caret {
+  color: var(--cx-faint);
+  flex-shrink: 0;
+}
+
+.cx-diff-file__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-diff-file__stats {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.cx-diff-add {
+  color: var(--cx-green);
+}
+
+.cx-diff-del {
+  color: var(--cx-danger);
+}
+
+.cx-diff-file__body {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  background: #000;
+}
+
+.cx-diff-line {
+  padding: 0 10px;
+  white-space: pre;
+}
+
+.cx-diff-line--add {
+  background: color-mix(in srgb, var(--cx-green) 13%, transparent);
+  color: var(--cx-green);
+}
+
+.cx-diff-line--del {
+  background: color-mix(in srgb, var(--cx-danger) 12%, transparent);
+  color: var(--cx-danger);
+}
+
+.cx-diff-line--hunk {
+  color: var(--cx-faint);
+  background: var(--cx-panel);
+}
+
+.cx-diff-line--ctx {
+  color: var(--cx-dim);
+}
+
 /* Queued mid-run prompts: visible but clearly not yet part of the history. */
 .message--queued {
   opacity: 0.55;
@@ -1605,6 +2499,33 @@ body {
   font-weight: 400;
   color: var(--text-dim);
   line-height: 1.5;
+}
+
+/* Checkbox rows: box and label side by side, hint tucked under the label.
+   (The base label is a column — without this the checkbox floats alone.) */
+.settings-field__label--row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  cursor: pointer;
+}
+
+.settings-field__label--row input[type='checkbox'] {
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.settings-field__label--row input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-field__label--row .settings-field__hint {
+  grid-column: 2;
 }
 
 .settings-presets {

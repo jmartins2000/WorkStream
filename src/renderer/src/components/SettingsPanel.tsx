@@ -22,6 +22,10 @@ interface SettingsPanelProps {
   onMediaTabsChange: (tabs: MediaTabConfig[]) => void
   adblock: boolean
   onAdblockChange: (enabled: boolean) => void
+  claudeEnabled: boolean
+  onClaudeEnabledChange: (enabled: boolean) => void
+  codexEnabled: boolean
+  onCodexEnabledChange: (enabled: boolean) => void
   onClose: () => void
 }
 
@@ -48,6 +52,10 @@ export function SettingsPanel({
   onMediaTabsChange,
   adblock,
   onAdblockChange,
+  claudeEnabled,
+  onClaudeEnabledChange,
+  codexEnabled,
+  onCodexEnabledChange,
   onClose
 }: SettingsPanelProps): JSX.Element {
   const [newLabel, setNewLabel] = useState('')
@@ -137,6 +145,37 @@ export function SettingsPanel({
                   New sessions start the Remote Control bridge, so they appear on claude.ai/code
                   and can be followed or driven from your phone or browser. Applies to sessions
                   started after toggling.
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section__title">Coding tabs</h3>
+            <div className="settings-field">
+              <label className="settings-field__label settings-field__label--row">
+                <input
+                  type="checkbox"
+                  checked={claudeEnabled}
+                  disabled={claudeEnabled && !codexEnabled}
+                  onChange={(e) => onClaudeEnabledChange(e.target.checked)}
+                />
+                Claude
+                <span className="settings-field__hint">
+                  Claude Code — sessions shared with the CLI (~/.claude).
+                </span>
+              </label>
+              <label className="settings-field__label settings-field__label--row">
+                <input
+                  type="checkbox"
+                  checked={codexEnabled}
+                  disabled={codexEnabled && !claudeEnabled}
+                  onChange={(e) => onCodexEnabledChange(e.target.checked)}
+                />
+                Codex
+                <span className="settings-field__hint">
+                  OpenAI&rsquo;s coding agent. Its background server only runs while the tab is
+                  in use. At least one coding tab stays enabled.
                 </span>
               </label>
             </div>

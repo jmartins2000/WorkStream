@@ -39,6 +39,10 @@ interface Settings {
   mediaTabs: MediaTabConfig[]
   /** Block ads & trackers in the media webviews (YouTube/Browser/custom tabs). */
   adblock: boolean
+  /** Show the Claude coding tab. */
+  claudeEnabled: boolean
+  /** Show the Codex coding tab (its server only spawns when the tab is used). */
+  codexEnabled: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -46,7 +50,9 @@ const DEFAULTS: Settings = {
   runDefaults: DEFAULT_RUN_SETTINGS,
   remoteControl: false,
   mediaTabs: DEFAULT_MEDIA_TABS,
-  adblock: true
+  adblock: true,
+  claudeEnabled: true,
+  codexEnabled: true
 }
 
 /**
@@ -104,7 +110,10 @@ function load(): Settings {
         runDefaults: sanitizeRunDefaults(parsed.runDefaults),
         remoteControl: parsed.remoteControl === true,
         mediaTabs: sanitizeMediaTabs(parsed.mediaTabs),
-        adblock: parsed.adblock !== false
+        adblock: parsed.adblock !== false,
+        // At least one coding tab must stay enabled — Claude wins ties.
+        claudeEnabled: parsed.claudeEnabled !== false || parsed.codexEnabled === false,
+        codexEnabled: parsed.codexEnabled !== false
       }
     }
   } catch {
@@ -128,6 +137,8 @@ export function useSettings(): {
   setRemoteControl: (enabled: boolean) => void
   setMediaTabs: (tabs: MediaTabConfig[]) => void
   setAdblock: (enabled: boolean) => void
+  setClaudeEnabled: (enabled: boolean) => void
+  setCodexEnabled: (enabled: boolean) => void
 } {
   const [settings, setSettings] = useState<Settings>(load)
 
@@ -145,6 +156,8 @@ export function useSettings(): {
     setRunDefaults: (defaults) => update({ runDefaults: defaults }),
     setRemoteControl: (enabled) => update({ remoteControl: enabled }),
     setMediaTabs: (tabs) => update({ mediaTabs: tabs }),
-    setAdblock: (enabled) => update({ adblock: enabled })
+    setAdblock: (enabled) => update({ adblock: enabled }),
+    setClaudeEnabled: (enabled) => update({ claudeEnabled: enabled }),
+    setCodexEnabled: (enabled) => update({ codexEnabled: enabled })
   }
 }

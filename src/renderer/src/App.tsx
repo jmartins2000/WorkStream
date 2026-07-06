@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { BrowserPane } from './components/BrowserPane'
 import { ClaudeCockpit } from './components/ClaudeCockpit'
+import { CodexCockpit } from './components/CodexCockpit'
 import { SettingsPanel } from './components/SettingsPanel'
 import type { MediaHandle } from './components/StremioPane'
 import { StremioPane } from './components/StremioPane'
 import { SitePane } from './components/SitePane'
 import { useClaudeRun } from './useClaudeRun'
+import { useCodexRun } from './useCodexRun'
 import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
+import logoUrl from './assets/icon.png'
+import logoMarkUrl from './assets/icon-mark.png'
 
 /** 'claude' or the id of an entertainment tab (built-in or custom). */
 type View = string
@@ -32,7 +36,9 @@ export function App(): JSX.Element {
     setRunDefaults,
     setRemoteControl,
     setMediaTabs,
-    setAdblock
+    setAdblock,
+    setClaudeEnabled,
+    setCodexEnabled
   } = useSettings()
 
   const enabledTabs = settings.mediaTabs.filter((tab) => tab.enabled)
@@ -61,10 +67,10 @@ export function App(): JSX.Element {
     return callback
   }
 
-  // Claude needs the user: pause all media, exit any fullscreen, then show the cockpit.
-  // exitFullscreen must be awaited — the fullscreen overlay covers the Claude pane
-  // until the browser tears it down, so we switch views only after it's gone.
-  const handleAttention = useCallback(async () => {
+  // An agent needs the user: pause all media, exit any fullscreen, then show
+  // THAT agent's cockpit. exitFullscreen must be awaited — the fullscreen
+  // overlay covers the pane until the browser tears it down.
+  const attentionTo = useCallback(async (target: 'claude' | 'codex') => {
     const panes = [...paneRefs.current.values()].filter(
       (handle): handle is MediaHandle => handle !== null
     )
@@ -72,12 +78,24 @@ export function App(): JSX.Element {
     try {
       await Promise.all(panes.map((pane) => pane.exitFullscreen()))
     } catch {
-      // Don't let a fullscreen-exit failure block showing Claude.
+      // Don't let a fullscreen-exit failure block showing the cockpit.
     }
-    setView('claude')
+    setView(target)
   }, [])
 
+  const handleAttention = useCallback(async () => attentionTo('claude'), [attentionTo])
+  const handleCodexAttention = useCallback(() => {
+    setCodexVisited(true) // ensure the pane is mounted before surfacing it
+    void attentionTo('codex')
+  }, [attentionTo])
+
   const run = useClaudeRun(handleAttention)
+  const codexRun = useCodexRun(handleCodexAttention)
+
+  // Codex mounts lazily: nothing (including its server process) exists until
+  // the user first opens the tab; it stays mounted afterwards so the
+  // conversation survives tab switches.
+  const [codexVisited, setCodexVisited] = useState(false)
 
   // User sent a prompt or answered Claude — go back to whatever they were
   // watching (or the first enabled tab if that one was removed/disabled).
@@ -91,9 +109,18 @@ export function App(): JSX.Element {
 
   const showClaude = useCallback(() => setView('claude'), [])
 
-  // Media tabs are "earned": only accessible while Claude is actively working.
+  const showCodex = useCallback(() => {
+    setCodexVisited(true)
+    setView('codex')
+  }, [])
+
+  // Media tabs are "earned": accessible while either coding agent is working.
   // (UNLOCK_MEDIA bypasses this for local testing — see dev:test script.)
-  const mediaAllowed = UNLOCK_MEDIA || run.status === 'running' || run.backgroundActive
+  const mediaAllowed =
+    UNLOCK_MEDIA ||
+    run.status === 'running' ||
+    run.backgroundActive ||
+    codexRun.status === 'running'
 
   const showMedia = useCallback(
     (tab: string) => {
@@ -104,60 +131,100 @@ export function App(): JSX.Element {
     [mediaAllowed]
   )
 
-  // If Claude stops working while on a media tab — or the tab was disabled or
-  // removed in settings — pull back to the cockpit.
-  useEffect(() => {
-    if (view === 'claude') return
-    if (!mediaAllowed || !enabledTabs.some((tab) => tab.id === view)) setView('claude')
-  }, [view, mediaAllowed, enabledTabs])
+  // The default coding tab respecting the settings toggles (Claude wins ties;
+  // at least one is always enabled — settings enforce it).
+  const fallbackCodingView = settings.claudeEnabled ? 'claude' : 'codex'
 
-  // Esc interrupts a running Claude turn (like the CLI).
+  // If the agents stop working while on a media tab — or the tab was disabled
+  // or removed in settings — pull back to a cockpit.
+  useEffect(() => {
+    if (view === 'claude' || view === 'codex') return
+    if (!mediaAllowed || !enabledTabs.some((tab) => tab.id === view)) {
+      if (fallbackCodingView === 'codex') setCodexVisited(true)
+      setView(fallbackCodingView)
+    }
+  }, [view, mediaAllowed, enabledTabs, fallbackCodingView])
+
+  // If the coding tab currently in front gets disabled, jump to the other one.
+  useEffect(() => {
+    if (view === 'claude' && !settings.claudeEnabled) {
+      setCodexVisited(true)
+      setView('codex')
+    } else if (view === 'codex' && !settings.codexEnabled) {
+      setView('claude')
+    }
+  }, [view, settings.claudeEnabled, settings.codexEnabled])
+
+  // Esc interrupts the running turn of whichever cockpit is in front.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && run.status === 'running') run.cancel()
+      if (e.key !== 'Escape') return
+      if (view === 'codex' && codexRun.status === 'running') codexRun.cancel()
+      else if (run.status === 'running') run.cancel()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [run])
+  }, [run, codexRun, view])
 
   const needsAttention =
     view !== 'claude' &&
     (run.status === 'awaiting-input' || run.status === 'done' || run.status === 'error')
 
+  const codexNeedsAttention =
+    view !== 'codex' &&
+    (codexRun.status === 'awaiting-input' ||
+      codexRun.status === 'done' ||
+      codexRun.status === 'error')
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <span className="topbar__logo">◇</span>
+          {/* Dark mode drops the black squircle (it vanishes into the bar)
+              and shows the bare white mark; light mode keeps the full icon. */}
+          <img
+            className={'topbar__logo' + (theme === 'dark' ? ' topbar__logo--mark' : '')}
+            src={theme === 'dark' ? logoMarkUrl : logoUrl}
+            alt=""
+          />
           <span className="topbar__name">WorkStream</span>
         </div>
 
         <div className="topbar__status">
-          {run.status === 'running' && <span className="status status--running">● Claude working…</span>}
-          {run.status === 'awaiting-input' && (
-            <span className="status status--attention">◆ Claude needs you</span>
+          {settings.claudeEnabled && (
+            <AgentStatus
+              name="Claude"
+              status={run.status}
+              backgroundActive={run.backgroundActive}
+            />
           )}
-          {run.status !== 'running' && run.backgroundActive && (
-            <span className="status status--running">● Background task running…</span>
-          )}
-          {run.status === 'done' && !run.backgroundActive && (
-            <span className="status status--done">✓ Claude finished</span>
-          )}
-          {run.status === 'error' && <span className="status status--error">⚠ Claude stopped</span>}
+          {settings.codexEnabled && <AgentStatus name="Codex" status={codexRun.status} />}
         </div>
 
         <div className="topbar__right">
           {/* Coding tabs (Claude today; room for Codex etc.) — separate group
               from the entertainment tabs. */}
           <nav className="topbar__tabs topbar__tabs--coding">
-            <button
-              type="button"
-              className={'tab' + (view === 'claude' ? ' tab--active' : '')}
-              onClick={showClaude}
-            >
-              Claude
-              {needsAttention && <span className="tab__dot" />}
-            </button>
+            {settings.claudeEnabled && (
+              <button
+                type="button"
+                className={'tab' + (view === 'claude' ? ' tab--active' : '')}
+                onClick={showClaude}
+              >
+                Claude
+                {needsAttention && <span className="tab__dot" />}
+              </button>
+            )}
+            {settings.codexEnabled && (
+              <button
+                type="button"
+                className={'tab' + (view === 'codex' ? ' tab--active' : '')}
+                onClick={showCodex}
+              >
+                Codex
+                {codexNeedsAttention && <span className="tab__dot" />}
+              </button>
+            )}
           </nav>
           {enabledTabs.length > 0 && (
             <nav className="topbar__tabs topbar__tabs--media">
@@ -224,6 +291,12 @@ export function App(): JSX.Element {
             )}
           </div>
         ))}
+        {codexVisited && settings.codexEnabled && (
+          <div className={'pane pane--claude' + (view === 'codex' ? ' pane--front' : '')}>
+            <CodexCockpit run={codexRun} onHandOff={handleHandOff} />
+          </div>
+        )}
+        {settings.claudeEnabled && (
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
           <ClaudeCockpit
             run={run}
@@ -234,6 +307,7 @@ export function App(): JSX.Element {
             remoteControl={settings.remoteControl}
           />
         </div>
+        )}
         {settingsOpen && (
           <SettingsPanel
             watchdogMs={settings.watchdogMs}
@@ -246,12 +320,44 @@ export function App(): JSX.Element {
             onMediaTabsChange={setMediaTabs}
             adblock={settings.adblock}
             onAdblockChange={setAdblock}
+            claudeEnabled={settings.claudeEnabled}
+            onClaudeEnabledChange={setClaudeEnabled}
+            codexEnabled={settings.codexEnabled}
+            onCodexEnabledChange={setCodexEnabled}
             onClose={() => setSettingsOpen(false)}
           />
         )}
       </main>
     </div>
   )
+}
+
+/** One agent's topbar status pill (shared by Claude and Codex). */
+function AgentStatus({
+  name,
+  status,
+  backgroundActive = false
+}: {
+  name: string
+  status: 'idle' | 'running' | 'awaiting-input' | 'done' | 'error'
+  backgroundActive?: boolean
+}): JSX.Element | null {
+  if (status === 'running') {
+    return <span className="status status--running">● {name} working…</span>
+  }
+  if (status === 'awaiting-input') {
+    return <span className="status status--attention">◆ {name} needs you</span>
+  }
+  if (backgroundActive) {
+    return <span className="status status--running">● {name} task running…</span>
+  }
+  if (status === 'error') {
+    return <span className="status status--error">⚠ {name} stopped</span>
+  }
+  if (status === 'done') {
+    return <span className="status status--done">✓ {name} finished</span>
+  }
+  return null
 }
 
 function GearIcon(): JSX.Element {

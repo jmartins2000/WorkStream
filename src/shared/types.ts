@@ -121,6 +121,14 @@ export type RunEvent =
       status: 'completed' | 'failed' | 'stopped'
       summary: string
     }
+  /** Codex: up-to-date unified diff of all file changes in the current turn. */
+  | { type: 'diff'; runId: string; diff: string }
+  /** Codex: the agent's current plan (steps with statuses). */
+  | {
+      type: 'plan'
+      runId: string
+      plan: { step: string; status: 'pending' | 'inProgress' | 'completed' }[]
+    }
   | {
       type: 'completed'
       runId: string
@@ -239,6 +247,54 @@ export interface MemoryFile {
   content: string
 }
 
+/* ----------------------------------------------------------------------------
+ * Codex (app-server protocol) — see docs/codex-integration.md
+ * ------------------------------------------------------------------------- */
+
+/** Codex auth/account state (from account/read). */
+export interface CodexAccount {
+  authenticated: boolean
+  /** 'chatgpt' | 'apiKey' | … or null when logged out. */
+  authMode: string | null
+  email: string | null
+  planType: string | null
+}
+
+/** A Codex model with its reasoning-effort options (from model/list). */
+export interface CodexModel {
+  id: string
+  displayName: string
+  efforts: string[]
+  defaultEffort: string
+  isDefault: boolean
+}
+
+/** A Codex thread for the sidebar (from thread/list). */
+export interface CodexThreadSummary {
+  threadId: string
+  title: string
+  cwd: string
+  updatedAt: number | null
+}
+
+/** Per-run Codex settings (dynamic — models/efforts come from model/list). */
+export interface CodexRunSettings {
+  model?: string
+  effort?: string
+  /** Wire values are kebab-case (verified against the server; the sandbox
+   *  enum below is camelCase — yes, really). */
+  approvalPolicy?: 'untrusted' | 'on-request' | 'never'
+  sandbox?: 'readOnly' | 'workspaceWrite' | 'dangerFullAccess'
+}
+
+/** Options for starting/resuming a Codex conversation. */
+export interface StartCodexRunOptions {
+  prompt: string
+  cwd: string
+  resumeThreadId?: string
+  settings?: CodexRunSettings
+}
+
 /**
  * State of the local Stremio streaming server (`stremio-runtime server.js` on
  * 127.0.0.1:11470). web.stremio.com cannot resolve or play any stream without
@@ -301,6 +357,30 @@ export interface ClaudeBridge {
   onRunEvent(listener: (event: RunEvent) => void): () => void
   /** Enable/disable ad & tracker blocking on the given webview partitions. */
   setAdblock(enabled: boolean, partitions: string[]): Promise<void>
+  /** Native folder picker; returns the chosen absolute path or null. */
+  pickFolder(): Promise<string | null>
+  /** Codex: binary presence (never spawns anything). */
+  codexInstalled(): Promise<{ installed: boolean; path: string | null }>
+  /** Codex: account/auth state (spawns the lazy server — Codex tab only). */
+  codexAccount(): Promise<CodexAccount>
+  /** Codex: run the ChatGPT browser login flow. */
+  codexLogin(): Promise<{ success: boolean; error?: string }>
+  /** Codex: available models with reasoning efforts. */
+  codexModels(): Promise<CodexModel[]>
+  /** Codex: threads across all projects (or scoped to one cwd). */
+  codexThreads(cwd?: string): Promise<CodexThreadSummary[]>
+  /** Codex: curated transcript of a thread (sidebar click). */
+  codexThreadMessages(threadId: string): Promise<TranscriptMessage[]>
+  /** Codex: start or resume a conversation; RunEvents arrive on onRunEvent. */
+  startCodexRun(options: StartCodexRunOptions): Promise<StartRunResult>
+  /** Codex: follow-up message (steers a live turn, or starts a new one). */
+  sendCodexMessage(runId: string, prompt: string): Promise<void>
+  /** Codex: interrupt the current turn. */
+  cancelCodexRun(runId: string): Promise<void>
+  /** Codex: end the conversation (idle server is reaped automatically). */
+  endCodexRun(runId: string): Promise<void>
+  /** Codex: reply to a pending approval/question. */
+  respondCodexInput(requestId: string, response: InputResponse): Promise<void>
   /** Current state of the local Stremio streaming server. */
   getStremioServerStatus(): Promise<StremioServerStatus>
   /** Trigger the one-time Rosetta 2 install (Apple Silicon only; prompts for admin password). */
@@ -335,6 +415,18 @@ export const IPC = {
   writeMemory: 'claude:writeMemory',
   runEvent: 'claude:runEvent',
   setAdblock: 'app:setAdblock',
+  pickFolder: 'app:pickFolder',
+  codexInstalled: 'codex:installed',
+  codexAccount: 'codex:account',
+  codexLogin: 'codex:login',
+  codexModels: 'codex:models',
+  codexThreads: 'codex:threads',
+  codexThreadMessages: 'codex:threadMessages',
+  startCodexRun: 'codex:startRun',
+  sendCodexMessage: 'codex:sendMessage',
+  cancelCodexRun: 'codex:cancelRun',
+  endCodexRun: 'codex:endRun',
+  respondCodexInput: 'codex:respondInput',
   getStremioServerStatus: 'stremio:getServerStatus',
   installRosetta: 'stremio:installRosetta',
   stremioServerStatus: 'stremio:serverStatus'

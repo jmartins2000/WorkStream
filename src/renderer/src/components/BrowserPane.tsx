@@ -65,12 +65,12 @@ export const BrowserPane = forwardRef<MediaHandle>(function BrowserPane(_props, 
     pause: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { document.querySelectorAll('video, audio').forEach(v => v.pause()); })();`
-      )
+      ).catch(() => {})
     },
     play: () => {
       void webviewRef.current?.executeJavaScript(
         `(() => { const v = document.querySelector('video, audio'); if (v) v.play(); })();`
-      )
+      ).catch(() => {})
     },
     reload: () => webviewRef.current?.reload(),
     exitFullscreen: async () => {

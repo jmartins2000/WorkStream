@@ -1,0 +1,19 @@
+<svg width="100%" height="100%" viewBox="106 106 812 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- The bare mark (no squircle): white diamond + dark play. Used in the
+       app topbar on dark mode, where the black squircle would vanish into
+       the bar. ViewBox is tight around the rotated diamond. -->
+  <defs>
+    <linearGradient id="diamondGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#A6A6A6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="239" y="239" width="546" height="546" rx="76"
+        fill="url(#diamondGradient)"
+        transform="rotate(45 512 512)"/>
+
+  <path d="M 458 373 L 458 651 L 679 512 Z"
+        fill="#111111"
+        stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
