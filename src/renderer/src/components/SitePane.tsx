@@ -22,22 +22,46 @@ interface SitePaneProps {
 const YT_AD_SKIP_SCRIPT = `(() => {
   if (window.__wsAdSkipInstalled) return
   window.__wsAdSkipInstalled = true
-  // Deliberately conservative: mute the ad and click Skip/close buttons.
-  // NO seeking and NO playbackRate games — mutating the player's single
-  // <video> element while YouTube is (or thinks it is) in ad state also
-  // sabotages the upcoming content video and can wedge playback entirely.
+  // Mute + accelerate + skip, with wedge guards. An earlier version seeked
+  // unconditionally and wedged playback when the ad request itself was
+  // blocked upstream (player stuck in ad state, no data, seeks hammering the
+  // shared <video>). Rules now: only touch an ad that is DEMONSTRABLY
+  // playing (readyState >= 3, finite duration), cap seek attempts per ad,
+  // and restore everything the moment the ad state ends.
   let mutedByUs = false
+  let lastAdSrc = null
+  let seekAttempts = 0
   setInterval(() => {
     const player = document.querySelector('.html5-video-player')
     const video = player ? player.querySelector('video') : null
     const inAd = !!(player && player.classList.contains('ad-showing'))
     if (video) {
-      if (inAd && !video.muted) {
-        video.muted = true
-        mutedByUs = true
-      } else if (!inAd && mutedByUs) {
-        video.muted = false
-        mutedByUs = false
+      if (inAd) {
+        if (!video.muted) {
+          video.muted = true
+          mutedByUs = true
+        }
+        const hasData =
+          video.readyState >= 3 && Number.isFinite(video.duration) && video.duration > 0
+        if (hasData) {
+          video.playbackRate = 10
+          if (video.src !== lastAdSrc) {
+            lastAdSrc = video.src
+            seekAttempts = 0
+          }
+          if (seekAttempts < 2 && video.duration - video.currentTime > 1) {
+            seekAttempts++
+            try { video.currentTime = Math.max(0, video.duration - 0.3) } catch { /* not seekable */ }
+          }
+        }
+      } else {
+        if (mutedByUs) {
+          video.muted = false
+          mutedByUs = false
+        }
+        if (video.playbackRate > 4) video.playbackRate = 1
+        lastAdSrc = null
+        seekAttempts = 0
       }
     }
     const skip = document.querySelector(
@@ -47,7 +71,7 @@ const YT_AD_SKIP_SCRIPT = `(() => {
     const overlayClose = document.querySelector('.ytp-ad-overlay-close-button')
     if (overlayClose) overlayClose.click()
   }, 500)
-  console.log('[workstream] youtube ad auto-skip armed (conservative)')
+  console.log('[workstream] youtube ad auto-skip armed (guarded acceleration)')
 })();`
 
 function isYouTube(url: string): boolean {
