@@ -10,7 +10,7 @@
  * HEAD directly there.
  */
 import { execSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -24,11 +24,19 @@ function git(args) {
   }
 }
 
+const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+// Total commit count is the build number — it bumps on every commit, so the
+// version string in Settings changes with each update (visible confirmation
+// that a self-update landed).
+const build = Number(git('rev-list --count HEAD')) || 0
+
 const info = {
+  version: pkg.version,
+  build,
   commit: git('rev-parse HEAD') || 'unknown',
   branch: git('rev-parse --abbrev-ref HEAD') || 'unknown',
   builtAt: new Date().toISOString()
 }
 
 writeFileSync(join(repoRoot, 'build-info.json'), JSON.stringify(info, null, 2) + '\n')
-console.log(`[write-build-info] ${info.commit.slice(0, 8)} (${info.branch})`)
+console.log(`[write-build-info] v${info.version} build ${info.build} · ${info.commit.slice(0, 8)}`)
