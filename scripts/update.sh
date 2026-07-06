@@ -31,11 +31,27 @@ fail_rollback() {
 
 cd "$CLONE_DIR" 2>/dev/null || { log "no clone at $CLONE_DIR — cannot self-update"; exit 1; }
 
+# The app spawns us with a minimal GUI PATH (/usr/bin:/bin:…) that lacks
+# node/npm — that's the "npm: command not found" self-update failure. Restore
+# a usable PATH: common install dirs, then version managers, then the user's
+# shell profile as a last resort.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.volta/bin:$PATH"
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1
+command -v fnm >/dev/null 2>&1 && eval "$(fnm env 2>/dev/null)"
+if ! command -v npm >/dev/null 2>&1; then
+  for rc in "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile"; do
+    [ -f "$rc" ] && . "$rc" >/dev/null 2>&1
+  done
+fi
+command -v npm >/dev/null 2>&1 || fail_rollback "node/npm not found — update needs Node.js on PATH"
+
 # Give the quitting app a moment to fully exit and release the .app.
 sleep 1
 
 log "fetching latest…"
-git fetch --depth 1 origin main || fail_rollback "git fetch failed"
+git fetch origin main || fail_rollback "git fetch failed"
+# Full history (not shallow) so the build number = commit count is accurate.
+git rev-parse --is-shallow-repository 2>/dev/null | grep -q true && git fetch --unshallow origin 2>/dev/null
 # Managed clone is app-owned — hard reset guarantees a clean, conflict-free update.
 git reset --hard origin/main || fail_rollback "git reset failed"
 

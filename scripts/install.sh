@@ -33,12 +33,16 @@ xcode-select -p >/dev/null 2>&1 || die "Xcode Command Line Tools required: run '
 # --- Clone or update ------------------------------------------------------
 if [ -d "$CLONE_DIR/.git" ]; then
   say "Existing install found at $CLONE_DIR — updating it."
-  git -C "$CLONE_DIR" fetch --depth 1 origin main
+  git -C "$CLONE_DIR" fetch origin main
+  # Unshallow a previously shallow clone so the build number (commit count) is right.
+  git -C "$CLONE_DIR" rev-parse --is-shallow-repository 2>/dev/null | grep -q true \
+    && git -C "$CLONE_DIR" fetch --unshallow origin 2>/dev/null
   git -C "$CLONE_DIR" reset --hard origin/main
 else
   say "Cloning WorkStream into $CLONE_DIR"
   rm -rf "$CLONE_DIR"
-  git clone --depth 1 "$REPO_URL" "$CLONE_DIR"
+  # Full clone (not shallow) so the build number = commit count works.
+  git clone "$REPO_URL" "$CLONE_DIR"
 fi
 
 cd "$CLONE_DIR"
