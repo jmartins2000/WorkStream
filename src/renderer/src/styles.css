@@ -2493,6 +2493,33 @@ body {
   line-height: 1.5;
 }
 
+/* Checkbox rows: box and label side by side, hint tucked under the label.
+   (The base label is a column — without this the checkbox floats alone.) */
+.settings-field__label--row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  cursor: pointer;
+}
+
+.settings-field__label--row input[type='checkbox'] {
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.settings-field__label--row input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-field__label--row .settings-field__hint {
+  grid-column: 2;
+}
+
 .settings-presets {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
