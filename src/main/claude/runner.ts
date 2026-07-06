@@ -17,6 +17,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { app } from 'electron'
 import {
   query,
   type CanUseTool,
@@ -48,6 +51,25 @@ import { parseQuestions, withAnswers } from './interaction.js'
  */
 const DEFAULT_PERMISSION_MODE: PermissionMode = 'bypassPermissions'
 const AUTO_ALLOWED_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'TodoWrite']
+
+/**
+ * Absolute path to the SDK's bundled `claude` binary on the real filesystem
+ * (packaged app only). electron-builder unpacks the SDK to app.asar.unpacked,
+ * but the SDK resolves the binary to its logical app.asar path, which can't be
+ * spawned. Return the unpacked path so it can; undefined in dev (the SDK
+ * resolves it from node_modules normally). The platform sub-package may be
+ * hoisted or nested, so both layouts are checked.
+ */
+function packagedClaudeExecutable(): string | undefined {
+  if (!app.isPackaged) return undefined
+  const platformPkg = `claude-agent-sdk-${process.platform}-${process.arch}`
+  const nm = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@anthropic-ai')
+  const candidates = [
+    join(nm, 'claude-agent-sdk', 'node_modules', '@anthropic-ai', platformPkg, 'claude'),
+    join(nm, platformPkg, 'claude')
+  ]
+  return candidates.find((p) => existsSync(p))
+}
 
 type Emit = (event: RunEvent) => void
 
@@ -348,6 +370,11 @@ async function drive(
     // Surface CLI diagnostics in the dev terminal to aid debugging.
     stderr: (data: string) => process.stderr.write(`[claude-cli] ${data}`)
   }
+  // In the packaged app the SDK resolves its bundled `claude` binary to a path
+  // INSIDE app.asar and can't spawn it (an archive isn't a real directory →
+  // "spawn ENOTDIR"). Point it at the unpacked copy on the real filesystem.
+  const executable = packagedClaudeExecutable()
+  if (executable) queryOptions.pathToClaudeCodeExecutable = executable
   if (options.resumeSessionId) queryOptions.resume = options.resumeSessionId
   // 'default' means "let the account/CLI pick" — leave the option unset.
   if (settings?.model && settings.model !== 'default') queryOptions.model = settings.model
