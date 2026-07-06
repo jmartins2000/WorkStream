@@ -33,12 +33,22 @@ const enabledPartitions = new Set<string>()
 
 function getBlocker(): Promise<ElectronBlocker> {
   if (!blockerPromise) {
-    // "Full" = ads + tracking + annoyances lists, including the scriptlet
-    // filters that matter for YouTube's in-player ads.
-    blockerPromise = ElectronBlocker.fromPrebuiltFull(fetch, {
-      path: join(app.getPath('userData'), 'adblocker-engine-full.bin'),
+    // Ads+tracking lists only. The "full" bundle (annoyances + uBlock extras)
+    // BROKE YouTube playback: it carries redirect-style rules this engine can
+    // only hard-block, starving the player of requests it needs ("video never
+    // loads"). Network-level ads+tracking is the well-tested baseline.
+    blockerPromise = ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+      path: join(app.getPath('userData'), 'adblocker-engine.bin'),
       read: fs.readFile,
       write: fs.writeFile
+    }).then((blocker) => {
+      // Cosmetic injection never worked inside webview guests (its
+      // ipcRenderer round-trip rejects in every guest — the 3 unhandled
+      // rejections in the startup log) — disable it and keep the network
+      // layer, which is what actually blocks. The property is typed readonly
+      // but is a plain field the enable path consults at runtime.
+      ;(blocker.config as { loadCosmeticFilters: boolean }).loadCosmeticFilters = false
+      return blocker
     })
   }
   return blockerPromise
