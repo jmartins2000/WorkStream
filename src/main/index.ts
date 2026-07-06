@@ -230,6 +230,13 @@ app.whenReady().then(() => {
           forceTranscodeArmedUntil = Date.now() + 60_000
           console.log('[stremio] repeated decode errors — arming forced transcode')
         }
+        // Mirror recovery events to the main process so they land in the
+        // macOS unified log — readable after the fact via `log show` on an
+        // installed build (no debug mode needed) to diagnose the silent-audio
+        // and decode-recovery behaviour.
+        if (message.startsWith('[ws-audio-dead]') || message.startsWith('[ws-decode-error]')) {
+          console.log('[stremio-recovery] ' + message)
+        }
       })
     }
   })
