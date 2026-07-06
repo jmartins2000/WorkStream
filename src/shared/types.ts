@@ -121,6 +121,14 @@ export type RunEvent =
       status: 'completed' | 'failed' | 'stopped'
       summary: string
     }
+  /** Codex: up-to-date unified diff of all file changes in the current turn. */
+  | { type: 'diff'; runId: string; diff: string }
+  /** Codex: the agent's current plan (steps with statuses). */
+  | {
+      type: 'plan'
+      runId: string
+      plan: { step: string; status: 'pending' | 'inProgress' | 'completed' }[]
+    }
   | {
       type: 'completed'
       runId: string

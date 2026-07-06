@@ -243,6 +243,32 @@ function wireServer(proc: CodexProcess): void {
     }
   })
 
+  rpc.onNotification('turn/diff/updated', (params) => {
+    const run = runForParams(params)
+    const diff = asRecord(params).diff
+    if (run && typeof diff === 'string') {
+      run.emit({ type: 'diff', runId: run.runId, diff })
+    }
+  })
+
+  rpc.onNotification('turn/plan/updated', (params) => {
+    const run = runForParams(params)
+    if (!run) return
+    const rawPlan = asRecord(params).plan
+    const plan = (Array.isArray(rawPlan) ? rawPlan : []).map((entry) => {
+      const record = asRecord(entry)
+      const status = String(record.status ?? 'pending')
+      return {
+        step: String(record.step ?? ''),
+        status: (status === 'inProgress' || status === 'completed' ? status : 'pending') as
+          | 'pending'
+          | 'inProgress'
+          | 'completed'
+      }
+    })
+    run.emit({ type: 'plan', runId: run.runId, plan })
+  })
+
   rpc.onNotification('thread/tokenUsage/updated', (params) => {
     const run = runForParams(params)
     if (!run) return

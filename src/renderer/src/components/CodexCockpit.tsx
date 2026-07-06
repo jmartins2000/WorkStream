@@ -7,23 +7,21 @@ import type {
 } from '../../../shared/types'
 import type { UseCodexRun } from '../useCodexRun'
 import { useSessions } from '../useSessions'
-import { Transcript } from './Transcript'
-import { Composer } from './Composer'
-import { InputPanel } from './InputPanel'
+import { CodexTranscript } from './CodexTranscript'
+import { CodexComposer, ACCESS_MODES } from './CodexComposer'
+import { CodexDiffPane } from './CodexDiffPane'
 
 type Gate = 'checking' | 'not-installed' | 'login' | 'ready'
 
-const APPROVAL_OPTIONS: { value: NonNullable<CodexRunSettings['approvalPolicy']>; label: string }[] = [
-  { value: 'untrusted', label: 'Ask (untrusted)' },
-  { value: 'onRequest', label: 'On request' },
-  { value: 'never', label: 'Never ask' }
-]
-
-const SANDBOX_OPTIONS: { value: NonNullable<CodexRunSettings['sandbox']>; label: string }[] = [
-  { value: 'readOnly', label: 'Read-only' },
-  { value: 'workspaceWrite', label: 'Workspace' },
-  { value: 'dangerFullAccess', label: 'Full access' }
-]
+function relativeTime(ms: number | null): string {
+  if (!ms) return ''
+  const minutes = Math.round((Date.now() - ms) / 60000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  return `${Math.round(hours / 24)}d`
+}
 
 interface CodexCockpitProps {
   run: UseCodexRun
@@ -32,9 +30,12 @@ interface CodexCockpitProps {
 }
 
 /**
- * The Codex workspace: thread browser + transcript + composer, backed by the
- * lazy app-server (nothing spawns until this component asks for account
- * state — which only happens once the user actually opens the Codex tab).
+ * The Codex workspace, styled after the Codex desktop app: its own dark
+ * monochrome theme (independent of the app theme), three-pane layout —
+ * threads sidebar | conversation | diff review — inline approvals, and a
+ * composer with model/effort/access pills. Backed by the lazy app-server:
+ * nothing spawns until this component asks for account state, which only
+ * happens once the user opens the tab.
  */
 export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element {
   const sessions = useSessions()
@@ -44,14 +45,13 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
   const [models, setModels] = useState<CodexModel[]>([])
   const [threads, setThreads] = useState<CodexThreadSummary[]>([])
   const [settings, setSettings] = useState<CodexRunSettings>({
-    approvalPolicy: 'onRequest',
-    sandbox: 'workspaceWrite'
+    ...ACCESS_MODES[1].settings // Agent (workspace write, ask on request)
   })
+  const [accessMode, setAccessMode] = useState('agent')
   const [loggingIn, setLoggingIn] = useState(false)
   const [gateError, setGateError] = useState<string | null>(null)
+  const [diffOpen, setDiffOpen] = useState(true)
 
-  // Default the working directory to the selected project's path (shared
-  // project selector semantics with the Claude cockpit).
   useEffect(() => {
     if (sessions.selectedProject) setCwd(sessions.selectedProject.cwd)
   }, [sessions.selectedProject])
@@ -70,8 +70,8 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
     setGate('ready')
   }, [])
 
-  // Gate: installed? → authenticated? → ready. Spawns the server lazily on
-  // the account check, which is exactly "the user opened the Codex tab".
+  // Gate: installed? → authenticated? → ready. The account check is the lazy
+  // server's spawn moment — i.e. the first time the user opens this tab.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -115,7 +115,6 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
     void refreshThreads()
   }, [refreshThreads])
 
-  // New threads appear once a run starts — refresh when the id changes.
   useEffect(() => {
     if (run.threadId) void refreshThreads()
   }, [run.threadId, refreshThreads])
@@ -153,41 +152,48 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
     onHandOff()
   }
 
+  const handleAccessMode = (id: string): void => {
+    setAccessMode(id)
+    const mode = ACCESS_MODES.find((m) => m.id === id)
+    if (mode) setSettings((prev) => ({ ...prev, ...mode.settings }))
+  }
+
   const running = run.status === 'running'
-  const awaitingInput = run.status === 'awaiting-input'
-  const selectedModel = models.find((m) => m.id === settings.model)
+  const activeThread = threads.find((t) => t.threadId === run.threadId)
 
   if (gate !== 'ready') {
     return (
-      <div className="cockpit codex-gate">
-        <div className="codex-gate__body">
-          {gate === 'checking' && <p className="info-empty">Checking Codex…</p>}
+      <div className="codex-root">
+        <div className="cx-gate">
+          {gate === 'checking' && <p className="cx-gate__text">Connecting to Codex…</p>}
           {gate === 'not-installed' && (
             <>
-              <h2 className="codex-gate__title">Codex isn&rsquo;t installed</h2>
-              <p className="codex-gate__text">
-                Install the Codex app (codex.openai.com) or run{' '}
-                <code>npm i -g @openai/codex</code>, then reopen this tab.
+              <div className="cx-gate__logo">◎</div>
+              <h2 className="cx-gate__title">Codex isn&rsquo;t installed</h2>
+              <p className="cx-gate__text">
+                Install the Codex app or run <code>npm i -g @openai/codex</code>, then reopen
+                this tab.
               </p>
-              {gateError && <p className="error-banner">{gateError}</p>}
+              {gateError && <p className="cx-gate__error">{gateError}</p>}
             </>
           )}
           {gate === 'login' && (
             <>
-              <h2 className="codex-gate__title">Sign in to Codex</h2>
-              <p className="codex-gate__text">
-                Codex uses your ChatGPT account (Plus/Pro) or an OpenAI API key. The sign-in
-                opens in your browser.
+              <div className="cx-gate__logo">◎</div>
+              <h2 className="cx-gate__title">Sign in to Codex</h2>
+              <p className="cx-gate__text">
+                Uses your ChatGPT account (Plus/Pro) or an OpenAI API key. Sign-in opens in
+                your browser.
               </p>
               <button
                 type="button"
-                className="btn btn--primary"
+                className="cx-btn cx-btn--primary"
                 onClick={() => void handleLogin()}
                 disabled={loggingIn}
               >
                 {loggingIn ? 'Waiting for browser…' : 'Sign in with ChatGPT'}
               </button>
-              {gateError && <p className="error-banner">{gateError}</p>}
+              {gateError && <p className="cx-gate__error">{gateError}</p>}
             </>
           )}
         </div>
@@ -196,169 +202,101 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
   }
 
   return (
-    <div className="cockpit">
-      <aside className="sidebar">
-        <div className="sidebar__section">
-          <div className="sidebar__header">
-            <span>Project</span>
-          </div>
-          <select
-            className="sidebar__select"
-            value={sessions.selectedProject?.dirName ?? ''}
-            onChange={(event) => {
-              const project = sessions.projects.find((p) => p.dirName === event.target.value)
-              if (project) sessions.selectProject(project)
-            }}
-          >
-            {sessions.projects.map((project) => (
-              <option key={project.dirName} value={project.dirName}>
-                {project.cwd.split('/').filter(Boolean).pop()}
-              </option>
-            ))}
-          </select>
-          {cwd && <div className="sidebar__cwd">{cwd}</div>}
-          {account?.planType === 'free' && (
-            <div className="codex-plan-warning">
-              ChatGPT plan: free — Codex turns need Plus/Pro or an API key.
-            </div>
-          )}
+    <div className="codex-root">
+      <aside className="cx-sidebar">
+        <select
+          className="cx-project"
+          value={sessions.selectedProject?.dirName ?? ''}
+          onChange={(event) => {
+            const project = sessions.projects.find((p) => p.dirName === event.target.value)
+            if (project) sessions.selectProject(project)
+          }}
+        >
+          {sessions.projects.map((project) => (
+            <option key={project.dirName} value={project.dirName}>
+              {project.cwd.split('/').filter(Boolean).pop()}
+            </option>
+          ))}
+        </select>
+
+        <button type="button" className="cx-newthread" onClick={() => run.setMessages([], null)}>
+          + New thread
+        </button>
+
+        <div className="cx-threads">
+          {threads.map((thread) => (
+            <button
+              key={thread.threadId}
+              type="button"
+              className={
+                'cx-thread' + (thread.threadId === run.threadId ? ' cx-thread--active' : '')
+              }
+              onClick={() => void handleSelectThread(thread)}
+            >
+              <span className="cx-thread__title">{thread.title}</span>
+              <span className="cx-thread__time">{relativeTime(thread.updatedAt)}</span>
+            </button>
+          ))}
+          {threads.length === 0 && <p className="cx-threads__empty">No threads yet</p>}
         </div>
 
-        <div className="sidebar__section sidebar__section--grow">
-          <div className="sidebar__header">
-            <span>Threads</span>
-            <button
-              type="button"
-              className="btn btn--primary btn--small"
-              onClick={() => run.setMessages([], null)}
-            >
-              + New
-            </button>
+        {account?.planType === 'free' && (
+          <div className="cx-plan-warning">
+            Free ChatGPT plan — turns need Plus/Pro or an API key.
           </div>
-          <ul className="session-list">
-            {threads.length === 0 && <li className="session-list__empty">No threads yet</li>}
-            {threads.map((thread) => (
-              <li
-                key={thread.threadId}
-                className={
-                  'session-row' +
-                  (thread.threadId === run.threadId ? ' session-row--active' : '')
-                }
-              >
-                <button
-                  type="button"
-                  className="session-item"
-                  onClick={() => void handleSelectThread(thread)}
-                >
-                  <span className="session-item__title">{thread.title}</span>
-                  <span className="session-item__meta">
-                    {thread.updatedAt ? new Date(thread.updatedAt).toLocaleString() : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
       </aside>
 
-      <section className="cockpit__main">
-        <div className="cockpit__bar">
-          <div className="run-settings">
-            <label className="run-settings__field">
-              <span>Model</span>
-              <select
-                value={settings.model ?? ''}
-                onChange={(e) => {
-                  const model = models.find((m) => m.id === e.target.value)
-                  setSettings((prev) => ({
-                    ...prev,
-                    model: e.target.value,
-                    effort: model?.defaultEffort ?? prev.effort
-                  }))
-                }}
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="run-settings__field">
-              <span>Effort</span>
-              <select
-                value={settings.effort ?? ''}
-                onChange={(e) => setSettings((prev) => ({ ...prev, effort: e.target.value }))}
-              >
-                {(selectedModel?.efforts ?? []).map((effort) => (
-                  <option key={effort} value={effort}>
-                    {effort}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="run-settings__field">
-              <span>Approvals</span>
-              <select
-                value={settings.approvalPolicy}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    approvalPolicy: e.target.value as CodexRunSettings['approvalPolicy']
-                  }))
-                }
-              >
-                {APPROVAL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="run-settings__field">
-              <span>Sandbox</span>
-              <select
-                value={settings.sandbox}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    sandbox: e.target.value as CodexRunSettings['sandbox']
-                  }))
-                }
-              >
-                {SANDBOX_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="cockpit__bar-right">
+      <section className="cx-main">
+        <header className="cx-header">
+          <span className="cx-header__title">
+            {activeThread?.title ?? (run.threadId ? 'Thread' : 'New thread')}
+          </span>
+          <span className="cx-header__badges">
+            <span className="cx-badge">Local</span>
             {run.usage && (
-              <span className="usage" title="Tokens used in this thread">
-                {run.usage.inputTokens.toLocaleString()} in /{' '}
+              <span className="cx-header__usage">
+                {run.usage.inputTokens.toLocaleString()} in ·{' '}
                 {run.usage.outputTokens.toLocaleString()} out
               </span>
             )}
-          </div>
-        </div>
+            {run.diff && (
+              <button
+                type="button"
+                className={'cx-badge cx-badge--button' + (diffOpen ? ' cx-badge--on' : '')}
+                onClick={() => setDiffOpen((o) => !o)}
+              >
+                Diff
+              </button>
+            )}
+          </span>
+        </header>
 
-        <Transcript
+        <CodexTranscript
           messages={run.messages}
           streamingText={run.streamingText}
           running={running}
+          plan={run.plan}
+          pendingRequest={run.pendingRequest}
+          onRespond={handleRespond}
         />
-        {run.error && <div className="error-banner">{run.error}</div>}
-        {run.pendingRequest && <InputPanel request={run.pendingRequest} onRespond={handleRespond} />}
-        <Composer
+
+        {run.error && <div className="cx-error">{run.error}</div>}
+
+        <CodexComposer
           running={running}
-          disabled={!cwd || awaitingInput}
-          commands={[]}
+          disabled={!cwd || run.status === 'awaiting-input'}
+          models={models}
+          settings={settings}
+          accessMode={accessMode}
+          onSettingsChange={setSettings}
+          onAccessModeChange={handleAccessMode}
           onSend={handleSend}
           onCancel={run.cancel}
         />
       </section>
+
+      {run.diff && diffOpen && <CodexDiffPane diff={run.diff} onClose={() => setDiffOpen(false)} />}
     </div>
   )
 }

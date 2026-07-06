@@ -20,6 +20,10 @@ export interface UseCodexRun {
   error: string | null
   pendingRequest: InputRequest | null
   usage: RunUsage | null
+  /** Latest unified diff of the conversation's file changes (diff pane). */
+  diff: string | null
+  /** The agent's current plan steps, when it published one. */
+  plan: { step: string; status: 'pending' | 'inProgress' | 'completed' }[] | null
   setMessages: (messages: TranscriptMessage[], threadId: string | null) => void
   start: (prompt: string, cwd: string, settings?: CodexRunSettings) => Promise<void>
   cancel: () => void
@@ -41,6 +45,10 @@ export function useCodexRun(onAttention: () => void): UseCodexRun {
   const [error, setError] = useState<string | null>(null)
   const [pendingRequest, setPendingRequest] = useState<InputRequest | null>(null)
   const [usage, setUsage] = useState<RunUsage | null>(null)
+  const [diff, setDiff] = useState<string | null>(null)
+  const [plan, setPlan] = useState<
+    { step: string; status: 'pending' | 'inProgress' | 'completed' }[] | null
+  >(null)
 
   const activeRunId = useRef<string | null>(null)
   const onAttentionRef = useRef(onAttention)
@@ -78,6 +86,14 @@ export function useCodexRun(onAttention: () => void): UseCodexRun {
 
         case 'usage':
           setUsage(event.usage)
+          break
+
+        case 'diff':
+          setDiff(event.diff.trim() ? event.diff : null)
+          break
+
+        case 'plan':
+          setPlan(event.plan.length > 0 ? event.plan : null)
           break
 
         case 'error':
@@ -129,6 +145,8 @@ export function useCodexRun(onAttention: () => void): UseCodexRun {
     setError(null)
     setStatus('idle')
     setPendingRequest(null)
+    setDiff(null)
+    setPlan(null)
   }, [])
 
   const start = useCallback(
@@ -193,6 +211,8 @@ export function useCodexRun(onAttention: () => void): UseCodexRun {
     error,
     pendingRequest,
     usage,
+    diff,
+    plan,
     setMessages,
     start,
     cancel,
