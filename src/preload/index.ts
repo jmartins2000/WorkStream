@@ -87,7 +87,7 @@ const api: ClaudeBridge = {
   codexLogin: () =>
     ipcRenderer.invoke(IPC.codexLogin) as Promise<{ success: boolean; error?: string }>,
   codexModels: () => ipcRenderer.invoke(IPC.codexModels) as Promise<CodexModel[]>,
-  codexThreads: (cwd: string) =>
+  codexThreads: (cwd?: string) =>
     ipcRenderer.invoke(IPC.codexThreads, cwd) as Promise<CodexThreadSummary[]>,
   codexThreadMessages: (threadId: string) =>
     ipcRenderer.invoke(IPC.codexThreadMessages, threadId) as Promise<TranscriptMessage[]>,

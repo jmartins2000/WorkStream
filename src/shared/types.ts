@@ -365,8 +365,8 @@ export interface ClaudeBridge {
   codexLogin(): Promise<{ success: boolean; error?: string }>
   /** Codex: available models with reasoning efforts. */
   codexModels(): Promise<CodexModel[]>
-  /** Codex: threads for a project directory. */
-  codexThreads(cwd: string): Promise<CodexThreadSummary[]>
+  /** Codex: threads across all projects (or scoped to one cwd). */
+  codexThreads(cwd?: string): Promise<CodexThreadSummary[]>
   /** Codex: curated transcript of a thread (sidebar click). */
   codexThreadMessages(threadId: string): Promise<TranscriptMessage[]>
   /** Codex: start or resume a conversation; RunEvents arrive on onRunEvent. */

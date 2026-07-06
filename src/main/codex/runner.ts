@@ -478,12 +478,12 @@ export async function codexModels(): Promise<
   })
 }
 
-/** Threads for the sidebar, scoped to a project directory. */
-export async function codexThreads(cwd: string): Promise<CodexThreadSummary[]> {
+/** Threads for the sidebar — all projects (like the Codex app), or one cwd. */
+export async function codexThreads(cwd?: string): Promise<CodexThreadSummary[]> {
   const proc = await ensureServer()
   const result = asRecord(
     await proc.rpc.request('thread/list', {
-      cwd,
+      ...(cwd ? { cwd } : {}),
       limit: 50,
       sortKey: 'updated_at',
       sortDirection: 'desc'
@@ -495,7 +495,7 @@ export async function codexThreads(cwd: string): Promise<CodexThreadSummary[]> {
     return {
       threadId: String(thread.id ?? ''),
       title: String(thread.name ?? thread.preview ?? '(no prompt)').trim() || '(no prompt)',
-      cwd: String(thread.cwd ?? cwd),
+      cwd: String(thread.cwd ?? cwd ?? ''),
       updatedAt: parseTimestamp(thread.updatedAt ?? thread.recencyAt)
     }
   })

@@ -205,7 +205,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.codexModels, () => codexModels())
 
-  ipcMain.handle(IPC.codexThreads, (_event, cwd: string) => codexThreads(cwd))
+  ipcMain.handle(IPC.codexThreads, (_event, cwd?: string) => codexThreads(cwd))
 
   ipcMain.handle(IPC.codexThreadMessages, (_event, threadId: string) =>
     codexThreadMessages(threadId)

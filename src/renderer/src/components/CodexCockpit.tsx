@@ -40,6 +40,25 @@ function basename(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
 }
 
+/** Group threads by project folder, groups ordered by most recent activity. */
+function groupThreads(
+  threads: CodexThreadSummary[]
+): { cwd: string; threads: CodexThreadSummary[] }[] {
+  const groups = new Map<string, CodexThreadSummary[]>()
+  for (const thread of threads) {
+    const key = thread.cwd || '(unknown)'
+    const list = groups.get(key)
+    if (list) list.push(thread)
+    else groups.set(key, [thread])
+  }
+  return [...groups.entries()]
+    .map(([cwd, list]) => ({ cwd, threads: list }))
+    .sort(
+      (a, b) => Math.max(...b.threads.map((t) => t.updatedAt ?? 0)) -
+        Math.max(...a.threads.map((t) => t.updatedAt ?? 0))
+    )
+}
+
 function relativeTime(ms: number | null): string {
   if (!ms) return ''
   const minutes = Math.round((Date.now() - ms) / 60000)
@@ -139,14 +158,15 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
     }
   }, [loadReady])
 
+  // All threads across projects, like the Codex app's sidebar.
   const refreshThreads = useCallback(async () => {
-    if (!cwd || gate !== 'ready') return
+    if (gate !== 'ready') return
     try {
-      setThreads(await window.claude.codexThreads(cwd))
+      setThreads(await window.claude.codexThreads())
     } catch {
       setThreads([])
     }
-  }, [cwd, gate])
+  }, [gate])
 
   useEffect(() => {
     void refreshThreads()
@@ -277,18 +297,25 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
         </button>
 
         <div className="cx-threads">
-          {threads.map((thread) => (
-            <button
-              key={thread.threadId}
-              type="button"
-              className={
-                'cx-thread' + (thread.threadId === run.threadId ? ' cx-thread--active' : '')
-              }
-              onClick={() => void handleSelectThread(thread)}
-            >
-              <span className="cx-thread__title">{thread.title}</span>
-              <span className="cx-thread__time">{relativeTime(thread.updatedAt)}</span>
-            </button>
+          {groupThreads(threads).map((group) => (
+            <div key={group.cwd} className="cx-thread-group">
+              <div className="cx-thread-group__name" title={group.cwd}>
+                {basename(group.cwd)}
+              </div>
+              {group.threads.map((thread) => (
+                <button
+                  key={thread.threadId}
+                  type="button"
+                  className={
+                    'cx-thread' + (thread.threadId === run.threadId ? ' cx-thread--active' : '')
+                  }
+                  onClick={() => void handleSelectThread(thread)}
+                >
+                  <span className="cx-thread__title">{thread.title}</span>
+                  <span className="cx-thread__time">{relativeTime(thread.updatedAt)}</span>
+                </button>
+              ))}
+            </div>
           ))}
           {threads.length === 0 && <p className="cx-threads__empty">No threads yet</p>}
         </div>
