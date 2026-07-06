@@ -183,17 +183,14 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbar__status">
-          {run.status === 'running' && <span className="status status--running">● Claude working…</span>}
-          {run.status === 'awaiting-input' && (
-            <span className="status status--attention">◆ Claude needs you</span>
+          {settings.claudeEnabled && (
+            <AgentStatus
+              name="Claude"
+              status={run.status}
+              backgroundActive={run.backgroundActive}
+            />
           )}
-          {run.status !== 'running' && run.backgroundActive && (
-            <span className="status status--running">● Background task running…</span>
-          )}
-          {run.status === 'done' && !run.backgroundActive && (
-            <span className="status status--done">✓ Claude finished</span>
-          )}
-          {run.status === 'error' && <span className="status status--error">⚠ Claude stopped</span>}
+          {settings.codexEnabled && <AgentStatus name="Codex" status={codexRun.status} />}
         </div>
 
         <div className="topbar__right">
@@ -325,6 +322,34 @@ export function App(): JSX.Element {
       </main>
     </div>
   )
+}
+
+/** One agent's topbar status pill (shared by Claude and Codex). */
+function AgentStatus({
+  name,
+  status,
+  backgroundActive = false
+}: {
+  name: string
+  status: 'idle' | 'running' | 'awaiting-input' | 'done' | 'error'
+  backgroundActive?: boolean
+}): JSX.Element | null {
+  if (status === 'running') {
+    return <span className="status status--running">● {name} working…</span>
+  }
+  if (status === 'awaiting-input') {
+    return <span className="status status--attention">◆ {name} needs you</span>
+  }
+  if (backgroundActive) {
+    return <span className="status status--running">● {name} task running…</span>
+  }
+  if (status === 'error') {
+    return <span className="status status--error">⚠ {name} stopped</span>
+  }
+  if (status === 'done') {
+    return <span className="status status--done">✓ {name} finished</span>
+  }
+  return null
 }
 
 function GearIcon(): JSX.Element {

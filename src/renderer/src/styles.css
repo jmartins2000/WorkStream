@@ -129,6 +129,7 @@ body {
   flex: 1;
   display: flex;
   justify-content: center;
+  gap: 8px; /* both agents can show a pill at once */
 }
 
 .status {
