@@ -22,6 +22,8 @@ interface SettingsPanelProps {
   onMediaTabsChange: (tabs: MediaTabConfig[]) => void
   adblock: boolean
   onAdblockChange: (enabled: boolean) => void
+  codexEnabled: boolean
+  onCodexEnabledChange: (enabled: boolean) => void
   onClose: () => void
 }
 
@@ -48,6 +50,8 @@ export function SettingsPanel({
   onMediaTabsChange,
   adblock,
   onAdblockChange,
+  codexEnabled,
+  onCodexEnabledChange,
   onClose
 }: SettingsPanelProps): JSX.Element {
   const [newLabel, setNewLabel] = useState('')
@@ -137,6 +141,24 @@ export function SettingsPanel({
                   New sessions start the Remote Control bridge, so they appear on claude.ai/code
                   and can be followed or driven from your phone or browser. Applies to sessions
                   started after toggling.
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section__title">Coding tabs</h3>
+            <div className="settings-field">
+              <label className="settings-field__label settings-field__label--row">
+                <input
+                  type="checkbox"
+                  checked={codexEnabled}
+                  onChange={(e) => onCodexEnabledChange(e.target.checked)}
+                />
+                Codex
+                <span className="settings-field__hint">
+                  Show the Codex tab (OpenAI&rsquo;s coding agent). Its background server only
+                  runs while the tab is in use — Claude-only sessions never start it.
                 </span>
               </label>
             </div>

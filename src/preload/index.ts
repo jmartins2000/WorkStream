@@ -8,6 +8,10 @@ import {
   IPC,
   type AgentSummary,
   type ClaudeBridge,
+  type CodexAccount,
+  type CodexModel,
+  type CodexThreadSummary,
+  type StartCodexRunOptions,
   type CommandSummary,
   type ContextUsage,
   type InputResponse,
@@ -76,6 +80,24 @@ const api: ClaudeBridge = {
   },
   setAdblock: (enabled: boolean, partitions: string[]) =>
     ipcRenderer.invoke(IPC.setAdblock, enabled, partitions) as Promise<void>,
+  codexInstalled: () =>
+    ipcRenderer.invoke(IPC.codexInstalled) as Promise<{ installed: boolean; path: string | null }>,
+  codexAccount: () => ipcRenderer.invoke(IPC.codexAccount) as Promise<CodexAccount>,
+  codexLogin: () =>
+    ipcRenderer.invoke(IPC.codexLogin) as Promise<{ success: boolean; error?: string }>,
+  codexModels: () => ipcRenderer.invoke(IPC.codexModels) as Promise<CodexModel[]>,
+  codexThreads: (cwd: string) =>
+    ipcRenderer.invoke(IPC.codexThreads, cwd) as Promise<CodexThreadSummary[]>,
+  codexThreadMessages: (threadId: string) =>
+    ipcRenderer.invoke(IPC.codexThreadMessages, threadId) as Promise<TranscriptMessage[]>,
+  startCodexRun: (options: StartCodexRunOptions) =>
+    ipcRenderer.invoke(IPC.startCodexRun, options) as Promise<StartRunResult>,
+  sendCodexMessage: (runId: string, prompt: string) =>
+    ipcRenderer.invoke(IPC.sendCodexMessage, runId, prompt) as Promise<void>,
+  cancelCodexRun: (runId: string) => ipcRenderer.invoke(IPC.cancelCodexRun, runId) as Promise<void>,
+  endCodexRun: (runId: string) => ipcRenderer.invoke(IPC.endCodexRun, runId) as Promise<void>,
+  respondCodexInput: (requestId: string, response: InputResponse) =>
+    ipcRenderer.invoke(IPC.respondCodexInput, requestId, response) as Promise<void>,
   getStremioServerStatus: () =>
     ipcRenderer.invoke(IPC.getStremioServerStatus) as Promise<StremioServerStatus>,
   installRosetta: () => ipcRenderer.invoke(IPC.installRosetta) as Promise<void>,

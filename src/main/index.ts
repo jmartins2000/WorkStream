@@ -12,6 +12,7 @@ import {
 import { broadcastStremioStatus, registerIpcHandlers } from './ipc.js'
 import * as stremioServer from './stremio/server.js'
 import { setAdblock } from './adblock.js'
+import { stopCodexServer } from './codex/runner.js'
 
 /** Partitions backing the media webviews (Stremio / YouTube / Browser). */
 const WEBVIEW_PARTITIONS = ['persist:stremio', 'persist:youtube', 'persist:browser']
@@ -306,4 +307,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stremioServer.stop()
+  stopCodexServer()
 })

@@ -46,6 +46,19 @@ import {
 } from './claude/runner.js'
 import * as stremioServer from './stremio/server.js'
 import { setAdblock } from './adblock.js'
+import {
+  cancelCodexRun,
+  codexAccount,
+  codexInstalled,
+  codexLogin,
+  codexModels,
+  codexThreadMessages,
+  codexThreads,
+  endCodexRun,
+  resolveCodexInput,
+  sendCodexMessage,
+  startCodexRun
+} from './codex/runner.js'
 
 /** Resolve the CLAUDE.md path for a memory scope (mirrors the CLI's /memory). */
 function memoryPath(scope: MemoryScope, cwd: string): string {
@@ -173,6 +186,43 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.setAdblock, (_event, enabled: boolean, partitions: string[]) =>
     setAdblock(enabled, partitions)
   )
+
+  // --- Codex (lazy app-server; see docs/codex-integration.md) ---
+
+  ipcMain.handle(IPC.codexInstalled, () => codexInstalled())
+
+  ipcMain.handle(IPC.codexAccount, () => codexAccount())
+
+  ipcMain.handle(IPC.codexLogin, () => codexLogin())
+
+  ipcMain.handle(IPC.codexModels, () => codexModels())
+
+  ipcMain.handle(IPC.codexThreads, (_event, cwd: string) => codexThreads(cwd))
+
+  ipcMain.handle(IPC.codexThreadMessages, (_event, threadId: string) =>
+    codexThreadMessages(threadId)
+  )
+
+  ipcMain.handle(IPC.startCodexRun, async (event: IpcMainInvokeEvent, options) => {
+    const sender = event.sender
+    const emit = (runEvent: RunEvent): void => {
+      if (!sender.isDestroyed()) sender.send(IPC.runEvent, runEvent)
+    }
+    const runId = await startCodexRun(options, emit)
+    return { runId }
+  })
+
+  ipcMain.handle(IPC.sendCodexMessage, (_event, runId: string, prompt: string) =>
+    sendCodexMessage(runId, prompt)
+  )
+
+  ipcMain.handle(IPC.cancelCodexRun, (_event, runId: string) => cancelCodexRun(runId))
+
+  ipcMain.handle(IPC.endCodexRun, (_event, runId: string) => endCodexRun(runId))
+
+  ipcMain.handle(IPC.respondCodexInput, (_event, requestId: string, response: InputResponse) => {
+    resolveCodexInput(requestId, response)
+  })
 
   ipcMain.handle(IPC.getStremioServerStatus, () => stremioServer.getStatus())
 

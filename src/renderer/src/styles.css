@@ -1173,6 +1173,44 @@ body {
   border-color: var(--accent);
 }
 
+/* ---- Codex tab ---- */
+.codex-gate {
+  align-items: center;
+  justify-content: center;
+}
+
+.codex-gate__body {
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.codex-gate__title {
+  font-family: var(--serif);
+  font-weight: 500;
+  margin: 0;
+}
+
+.codex-gate__text {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.codex-plan-warning {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border-radius: 7px;
+  padding: 6px 9px;
+}
+
 /* Queued mid-run prompts: visible but clearly not yet part of the history. */
 .message--queued {
   opacity: 0.55;
