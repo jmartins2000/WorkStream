@@ -6,6 +6,14 @@ directories:
 files:
   - out/**/*
   - package.json
+# The Agent SDK spawns its bundled `claude` binary as a real process. Anything
+# spawned must live on the real filesystem — a path inside app.asar can be
+# READ but not EXECUTED (the archive is a single file → "spawn ENOTDIR"). Keep
+# the whole SDK (JS + its platform binary) unpacked so its resolved spawn path
+# is real. (Stremio's binaries avoid this by living in extraResources.)
+asarUnpack:
+  - '**/node_modules/@anthropic-ai/claude-agent-sdk/**'
+  - '**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
 extraResources:
   # The local Stremio streaming server (fetched by npm run fetch:stremio);
   # bundled so the packaged app can stream offline-capable, same as Stremio's
