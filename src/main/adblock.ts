@@ -13,8 +13,19 @@
 
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { app, session } from 'electron'
+import { app, ipcMain, session } from 'electron'
 import { ElectronBlocker } from '@ghostery/adblocker-electron'
+
+/**
+ * enableBlockingInSession registers these ipcMain handlers GLOBALLY on every
+ * call — enabling a second session throws "Attempted to register a second
+ * handler". The handlers are identical (bound to the same blocker), so we
+ * drop them before each enable and let the call re-register.
+ */
+const GHOSTERY_IPC_CHANNELS = [
+  '@ghostery/adblocker/inject-cosmetic-filters',
+  '@ghostery/adblocker/is-mutation-observer-enabled'
+]
 
 let blockerPromise: Promise<ElectronBlocker> | null = null
 /** Partitions blocking is currently enabled on. */
@@ -44,14 +55,24 @@ export async function setAdblock(enabled: boolean, partitions: string[]): Promis
 
     for (const partition of [...enabledPartitions]) {
       if (!wanted.has(partition)) {
-        blocker.disableBlockingInSession(session.fromPartition(partition))
+        try {
+          blocker.disableBlockingInSession(session.fromPartition(partition))
+        } catch (err) {
+          console.warn(`[adblock] disable failed for ${partition}:`, err)
+        }
         enabledPartitions.delete(partition)
       }
     }
     for (const partition of wanted) {
       if (!enabledPartitions.has(partition)) {
-        blocker.enableBlockingInSession(session.fromPartition(partition))
-        enabledPartitions.add(partition)
+        try {
+          for (const channel of GHOSTERY_IPC_CHANNELS) ipcMain.removeHandler(channel)
+          blocker.enableBlockingInSession(session.fromPartition(partition))
+          enabledPartitions.add(partition)
+        } catch (err) {
+          // Isolate per-partition failures — the rest must still enable.
+          console.warn(`[adblock] enable failed for ${partition}:`, err)
+        }
       }
     }
     console.log(

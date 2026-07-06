@@ -120,6 +120,19 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // Dev: surface the renderer's console errors in the terminal — otherwise
+  // "Script failed to execute" style failures are invisible without DevTools.
+  if (isDev) {
+    window.webContents.on('console-message', (event, ...legacyArgs) => {
+      const details = event as unknown as { level?: string | number; message?: string }
+      const level = details.level ?? legacyArgs[0]
+      const message = typeof details.message === 'string' ? details.message : String(legacyArgs[1] ?? '')
+      if (level === 'error' || level === 3) {
+        console.error(`[renderer] ${message}`)
+      }
+    })
+  }
+
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
   if (isDev && devServerUrl) {
     void window.loadURL(devServerUrl)
@@ -251,12 +264,16 @@ app.whenReady().then(() => {
     // (aBytes stays 0) — they need entirely different fixes.
     app.on('web-contents-created', (_event, contents) => {
       if (contents.getType() !== 'webview') return
+      // Don't queue overlapping executeJavaScript calls — while a page is
+      // loading they pile up (the MaxListeners did-stop-loading warning).
+      let probeInFlight = false
       const timer = setInterval(() => {
         if (contents.isDestroyed()) {
           clearInterval(timer)
           return
         }
-        if (!contents.getURL().includes('stremio')) return
+        if (probeInFlight || !contents.getURL().includes('stremio')) return
+        probeInFlight = true
         void contents
           .executeJavaScript(
             `(() => {
@@ -278,6 +295,9 @@ app.whenReady().then(() => {
           })
           .catch(() => {
             /* page navigating; ignore */
+          })
+          .finally(() => {
+            probeInFlight = false
           })
       }, 5000)
     })
