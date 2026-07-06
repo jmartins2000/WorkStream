@@ -35,6 +35,7 @@ export function App(): JSX.Element {
     setRemoteControl,
     setMediaTabs,
     setAdblock,
+    setClaudeEnabled,
     setCodexEnabled
   } = useSettings()
 
@@ -128,12 +129,29 @@ export function App(): JSX.Element {
     [mediaAllowed]
   )
 
+  // The default coding tab respecting the settings toggles (Claude wins ties;
+  // at least one is always enabled — settings enforce it).
+  const fallbackCodingView = settings.claudeEnabled ? 'claude' : 'codex'
+
   // If the agents stop working while on a media tab — or the tab was disabled
-  // or removed in settings — pull back to the cockpit.
+  // or removed in settings — pull back to a cockpit.
   useEffect(() => {
     if (view === 'claude' || view === 'codex') return
-    if (!mediaAllowed || !enabledTabs.some((tab) => tab.id === view)) setView('claude')
-  }, [view, mediaAllowed, enabledTabs])
+    if (!mediaAllowed || !enabledTabs.some((tab) => tab.id === view)) {
+      if (fallbackCodingView === 'codex') setCodexVisited(true)
+      setView(fallbackCodingView)
+    }
+  }, [view, mediaAllowed, enabledTabs, fallbackCodingView])
+
+  // If the coding tab currently in front gets disabled, jump to the other one.
+  useEffect(() => {
+    if (view === 'claude' && !settings.claudeEnabled) {
+      setCodexVisited(true)
+      setView('codex')
+    } else if (view === 'codex' && !settings.codexEnabled) {
+      setView('claude')
+    }
+  }, [view, settings.claudeEnabled, settings.codexEnabled])
 
   // Esc interrupts the running turn of whichever cockpit is in front.
   useEffect(() => {
@@ -182,14 +200,16 @@ export function App(): JSX.Element {
           {/* Coding tabs (Claude today; room for Codex etc.) — separate group
               from the entertainment tabs. */}
           <nav className="topbar__tabs topbar__tabs--coding">
-            <button
-              type="button"
-              className={'tab' + (view === 'claude' ? ' tab--active' : '')}
-              onClick={showClaude}
-            >
-              Claude
-              {needsAttention && <span className="tab__dot" />}
-            </button>
+            {settings.claudeEnabled && (
+              <button
+                type="button"
+                className={'tab' + (view === 'claude' ? ' tab--active' : '')}
+                onClick={showClaude}
+              >
+                Claude
+                {needsAttention && <span className="tab__dot" />}
+              </button>
+            )}
             {settings.codexEnabled && (
               <button
                 type="button"
@@ -271,6 +291,7 @@ export function App(): JSX.Element {
             <CodexCockpit run={codexRun} onHandOff={handleHandOff} />
           </div>
         )}
+        {settings.claudeEnabled && (
         <div className={'pane pane--claude' + (view === 'claude' ? ' pane--front' : '')}>
           <ClaudeCockpit
             run={run}
@@ -281,6 +302,7 @@ export function App(): JSX.Element {
             remoteControl={settings.remoteControl}
           />
         </div>
+        )}
         {settingsOpen && (
           <SettingsPanel
             watchdogMs={settings.watchdogMs}
@@ -293,6 +315,8 @@ export function App(): JSX.Element {
             onMediaTabsChange={setMediaTabs}
             adblock={settings.adblock}
             onAdblockChange={setAdblock}
+            claudeEnabled={settings.claudeEnabled}
+            onClaudeEnabledChange={setClaudeEnabled}
             codexEnabled={settings.codexEnabled}
             onCodexEnabledChange={setCodexEnabled}
             onClose={() => setSettingsOpen(false)}
