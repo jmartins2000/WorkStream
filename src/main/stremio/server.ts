@@ -89,8 +89,19 @@ function tuneServerSettings(): void {
     // null means "unlimited" in Stremio's settings — leave that alone.
     if (settings.cacheSize !== null) floor('cacheSize', 10 * 1024 * 1024 * 1024) // 10 GB
 
+    // Transcode headroom. The intermittent "video plays, no sound" bug is the
+    // web player (hls.js) timing out on the AUDIO rendition during a slow
+    // cold-start transcode (ffmpeg under Rosetta) and permanently falling back
+    // to video-only — even though the audio is being transcoded to AAC fine.
+    // Give the transcoder more CPU and let audio + video (and multiple
+    // segments) transcode in parallel so the first audio segments land before
+    // the player gives up. (Stock: horsepower 0.75, concurrency 1, track 1.)
+    floor('transcodeHorsepower', 1)
+    floor('transcodeConcurrency', 2)
+    floor('transcodeTrackConcurrency', 2)
+
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
-    console.log('[stremio-server] tuned server-settings.json (bt limits / cache floors)')
+    console.log('[stremio-server] tuned server-settings.json (bt limits / cache / transcode)')
   } catch (err) {
     // Non-fatal: the server still runs, just with stock throttles.
     console.warn('[stremio-server] could not tune server-settings.json:', err)
