@@ -10,6 +10,7 @@ import { useClaudeRun } from './useClaudeRun'
 import { useCodexRun } from './useCodexRun'
 import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
+import logoUrl from './assets/icon.png'
 
 /** 'claude' or the id of an entertainment tab (built-in or custom). */
 type View = string
@@ -178,7 +179,7 @@ export function App(): JSX.Element {
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <span className="topbar__logo">◆</span>
+          <img className="topbar__logo" src={logoUrl} alt="" />
           <span className="topbar__name">WorkStream</span>
         </div>
 

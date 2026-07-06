@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="build/icon.png" width="120" alt="WorkStream" />
+  <img src="build/icon.png" width="220" alt="WorkStream" />
   <h1>WorkStream</h1>
   <p><strong>Let Claude Code work while you actually enjoy the wait.</strong></p>
   <p>

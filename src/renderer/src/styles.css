@@ -105,17 +105,10 @@ body {
 }
 
 .topbar__logo {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  /* Miniature of the app icon: black chip, white diamond — agent-neutral
-     now that the app hosts both Claude and Codex. Constant across themes. */
-  background: linear-gradient(#1d1d1d, #0a0a0a);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
+  /* The actual app icon (its squircle is inset ~80% in the canvas, so the
+     image runs a bit larger than the old 26px chip to read the same size). */
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
 }
 
