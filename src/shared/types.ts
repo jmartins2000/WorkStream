@@ -281,7 +281,9 @@ export interface CodexThreadSummary {
 export interface CodexRunSettings {
   model?: string
   effort?: string
-  approvalPolicy?: 'untrusted' | 'onRequest' | 'never'
+  /** Wire values are kebab-case (verified against the server; the sandbox
+   *  enum below is camelCase — yes, really). */
+  approvalPolicy?: 'untrusted' | 'on-request' | 'never'
   sandbox?: 'readOnly' | 'workspaceWrite' | 'dangerFullAccess'
 }
 

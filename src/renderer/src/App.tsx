@@ -64,10 +64,10 @@ export function App(): JSX.Element {
     return callback
   }
 
-  // Claude needs the user: pause all media, exit any fullscreen, then show the cockpit.
-  // exitFullscreen must be awaited — the fullscreen overlay covers the Claude pane
-  // until the browser tears it down, so we switch views only after it's gone.
-  const handleAttention = useCallback(async () => {
+  // An agent needs the user: pause all media, exit any fullscreen, then show
+  // THAT agent's cockpit. exitFullscreen must be awaited — the fullscreen
+  // overlay covers the pane until the browser tears it down.
+  const attentionTo = useCallback(async (target: 'claude' | 'codex') => {
     const panes = [...paneRefs.current.values()].filter(
       (handle): handle is MediaHandle => handle !== null
     )
@@ -75,13 +75,19 @@ export function App(): JSX.Element {
     try {
       await Promise.all(panes.map((pane) => pane.exitFullscreen()))
     } catch {
-      // Don't let a fullscreen-exit failure block showing Claude.
+      // Don't let a fullscreen-exit failure block showing the cockpit.
     }
-    setView('claude')
+    setView(target)
   }, [])
 
+  const handleAttention = useCallback(async () => attentionTo('claude'), [attentionTo])
+  const handleCodexAttention = useCallback(() => {
+    setCodexVisited(true) // ensure the pane is mounted before surfacing it
+    void attentionTo('codex')
+  }, [attentionTo])
+
   const run = useClaudeRun(handleAttention)
-  const codexRun = useCodexRun(handleAttention)
+  const codexRun = useCodexRun(handleCodexAttention)
 
   // Codex mounts lazily: nothing (including its server process) exists until
   // the user first opens the tab; it stays mounted afterwards so the

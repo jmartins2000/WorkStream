@@ -10,8 +10,8 @@ export const ACCESS_MODES: {
   label: string
   settings: Pick<CodexRunSettings, 'approvalPolicy' | 'sandbox'>
 }[] = [
-  { id: 'read', label: 'Read-only', settings: { approvalPolicy: 'onRequest', sandbox: 'readOnly' } },
-  { id: 'agent', label: 'Agent', settings: { approvalPolicy: 'onRequest', sandbox: 'workspaceWrite' } },
+  { id: 'read', label: 'Read-only', settings: { approvalPolicy: 'on-request', sandbox: 'readOnly' } },
+  { id: 'agent', label: 'Agent', settings: { approvalPolicy: 'on-request', sandbox: 'workspaceWrite' } },
   {
     id: 'full',
     label: 'Full access',

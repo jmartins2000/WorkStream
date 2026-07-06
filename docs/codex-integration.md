@@ -99,7 +99,7 @@ spawn codex app-server (stdio)
 | `/compact` | `thread/compact/start` |
 | plan mode / ExitPlanMode review | closest: `review/start` + `turn/plan/updated`; not the same concept — design separately |
 | model/effort settings | `model/list` → per-turn `model` + `effort` overrides (sticky per thread) |
-| permission mode | `approvalPolicy` (`untrusted\|onRequest\|never`) × `sandboxPolicy` (`readOnly\|workspaceWrite\|dangerFullAccess`) — richer than Claude's, needs its own selector UI |
+| permission mode | `approvalPolicy` (`untrusted\|on-request\|on-failure\|never` — **kebab-case on the wire**, verified) × `sandboxPolicy` (`readOnly\|workspaceWrite\|dangerFullAccess` — **camelCase**, verified; the two enums differ in casing) — richer than Claude's, needs its own selector UI |
 
 **Process model decision**: one `codex app-server` process can host many
 threads (they're multiplexed; threads auto-unload after 30 idle minutes and
