@@ -53,6 +53,22 @@ then RE-ENCODEs the video track (ffmpeg tolerates the bad bitstream), which
 prevents further decode errors on that stream at a quality/CPU cost. Bonus: this session proves the audio pipeline healthy end-to-end
 (aBytes growing, unmuted).
 
+## Mitigation shipped (2026-07-06): audio-liveness auto-recovery
+Couldn't catch it live — the app pauses Stremio whenever Claude is working, so
+any diagnostic runs against a paused player; and the probe is dev-only. So
+instead of catching it, we recover from it: StremioPane's injected script now
+monitors `webkitAudioDecodedByteCount`. When the video is advancing, unmuted,
+volume up, video bytes growing, but audio bytes are stalled for >8s on real
+content (duration >90s), it treats the audio track as dead and runs the same
+reload+seek recovery as decode errors (which also re-negotiates the stream and
+can escalate to a transcoded AAC audio rendition). Shared 3-per-10min cap.
+Events log `[ws-audio-dead] …`; the main process mirrors both recovery lines to
+the macOS unified log as `[stremio-recovery] …`, so on an INSTALLED build they
+can be read after the fact with:
+  `log show --last 30m --predicate 'processImagePath CONTAINS "WorkStream"' --style compact | grep stremio-recovery`
+That capture (does aBytes stay 0? was it muted? did recovery fire?) is the next
+data point if the auto-recovery doesn't fully solve it.
+
 ## When it reproduces
 Capture the `[stremio-audio]` and `[stremio-net] …audio0…` lines and decide by
 the table above. Delete this file once fixed.

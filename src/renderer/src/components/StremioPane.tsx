@@ -75,10 +75,11 @@ const DECODE_RECOVERY_SCRIPT = `(() => {
     setTimeout(() => location.reload(), 800)
   }
 
+  let recovering = false
+
   // Phase 1: hook every video element as the player creates them — and, as a
   // safety net, scan for elements whose .error is already set (the event can
   // be missed if the player resets the element first).
-  let recovering = false
   setInterval(() => {
     document.querySelectorAll('video').forEach((v) => {
       if (!v.__wsHooked) {
@@ -96,7 +97,49 @@ const DECODE_RECOVERY_SCRIPT = `(() => {
       }
     })
   }, 2000)
-  console.log('[workstream] decode recovery armed')
+
+  // Audio-liveness monitor: the intermittent "video plays but no sound" bug.
+  // If the video is advancing, unmuted, and volume is up, but NO audio bytes
+  // are being decoded for a sustained window (while video bytes keep growing),
+  // the audio track is dead — reload+seek re-initializes the pipeline (and the
+  // recover() escalation can land a transcoded, browser-decodable audio
+  // rendition). Guards against false positives on genuinely-silent clips:
+  // real content only (duration > 90s), and the shared 3-per-10min cap.
+  const aState = new WeakMap()
+  setInterval(() => {
+    const v = document.querySelector('video')
+    if (!v || recovering) return
+    const aBytes = v.webkitAudioDecodedByteCount
+    const vBytes = v.webkitVideoDecodedByteCount
+    if (aBytes === undefined || vBytes === undefined) return
+    const prev = aState.get(v) || { t: v.currentTime, a: aBytes, v: vBytes, since: 0 }
+
+    const playing = !v.paused && v.readyState >= 3 && v.currentTime > prev.t + 0.1
+    const wantsSound = !v.muted && v.volume > 0.01
+    const videoAlive = vBytes > prev.v
+    const audioStalled = aBytes <= prev.a
+    const realContent = Number.isFinite(v.duration) && v.duration > 90
+
+    if (playing && wantsSound && videoAlive && audioStalled && realContent) {
+      if (!prev.since) prev.since = Date.now()
+      if (Date.now() - prev.since > 8000) {
+        console.log(
+          '[ws-audio-dead] no audio while playing — recovering. muted=' + v.muted +
+          ' vol=' + Math.round(v.volume * 100) / 100 + ' aBytes=' + aBytes + ' t=' + Math.round(v.currentTime)
+        )
+        recovering = true
+        recover(v.currentTime)
+      }
+    } else {
+      prev.since = 0
+    }
+    prev.t = v.currentTime
+    prev.a = aBytes
+    prev.v = vBytes
+    aState.set(v, prev)
+  }, 2000)
+
+  console.log('[workstream] decode + audio recovery armed')
 })();`
 
 /** Imperative controls the app uses to pause/resume playback in any media pane. */
