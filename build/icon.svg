@@ -9,10 +9,21 @@
       <stop offset="0" stop-color="#FFFFFF"/>
       <stop offset="1" stop-color="#A6A6A6"/>
     </linearGradient>
+    <!-- Rim light: thin bright edge on the top-left of the squircle fading
+         out diagonally (Stremio-style). -->
+    <linearGradient id="rimGradient" x1="0" y1="0" x2="0.75" y2="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
   </defs>
 
   <!-- near-black canvas (macOS-style rounded squircle, ~80% inset) -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bgGradient)"/>
+
+  <!-- rim light stroke, just inside the squircle edge -->
+  <rect x="103" y="103" width="818" height="818" rx="182"
+        fill="none" stroke="url(#rimGradient)" stroke-width="6"/>
 
   <!-- white diamond (rotated square), rounded corners -->
   <rect x="239" y="239" width="546" height="546" rx="76"
