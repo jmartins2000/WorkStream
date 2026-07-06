@@ -624,14 +624,24 @@ export async function startCodexRun(options: StartCodexRunOptions, emit: Emit): 
 
   emit({ type: 'started', runId, sessionId: threadId })
 
-  await proc.rpc.request('turn/start', {
-    threadId,
-    input: [{ type: 'text', text: options.prompt }],
-    ...turnOverrides(options.settings)
-  }).catch((err) => {
-    emit({ type: 'error', runId, message: friendlyError(err) })
-    emit({ type: 'completed', runId, sessionId: threadId, ok: false })
-  })
+  // Fire the first turn WITHOUT awaiting: the renderer only registers this
+  // run's id once startCodexRun resolves, so any event emitted while we were
+  // awaiting here (turn/started — or, for fast failures like plan limits, the
+  // error + turn/completed) would be dropped as "not my run" and the UI would
+  // hang on "Working…" forever. The small delay lets the invoke response land
+  // first even against very fast failures.
+  setTimeout(() => {
+    void proc.rpc
+      .request('turn/start', {
+        threadId,
+        input: [{ type: 'text', text: options.prompt }],
+        ...turnOverrides(options.settings)
+      })
+      .catch((err) => {
+        emit({ type: 'error', runId, message: friendlyError(err) })
+        emit({ type: 'completed', runId, sessionId: threadId, ok: false })
+      })
+  }, 50)
 
   return runId
 }
