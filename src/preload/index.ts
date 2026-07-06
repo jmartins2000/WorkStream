@@ -80,6 +80,7 @@ const api: ClaudeBridge = {
   },
   setAdblock: (enabled: boolean, partitions: string[]) =>
     ipcRenderer.invoke(IPC.setAdblock, enabled, partitions) as Promise<void>,
+  pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<string | null>,
   codexInstalled: () =>
     ipcRenderer.invoke(IPC.codexInstalled) as Promise<{ installed: boolean; path: string | null }>,
   codexAccount: () => ipcRenderer.invoke(IPC.codexAccount) as Promise<CodexAccount>,

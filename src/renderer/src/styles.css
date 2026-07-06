@@ -1288,13 +1288,48 @@ body {
   border-right: 1px solid var(--cx-border);
 }
 
+.cx-project-row {
+  display: flex;
+  gap: 6px;
+}
+
 .cx-project {
+  flex: 1;
+  min-width: 0;
   background: var(--cx-elev);
   border: 1px solid var(--cx-border);
   color: var(--cx-text);
   border-radius: 8px;
   padding: 7px 10px;
   font: inherit;
+}
+
+.cx-project--empty {
+  color: var(--cx-faint);
+}
+
+.cx-project-pick {
+  flex-shrink: 0;
+  width: 32px;
+  background: var(--cx-elev);
+  border: 1px solid var(--cx-border);
+  color: var(--cx-dim);
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cx-project-pick:hover {
+  color: var(--cx-text);
+}
+
+.cx-cwd {
+  font-size: 10.5px;
+  color: var(--cx-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
 }
 
 .cx-newthread {

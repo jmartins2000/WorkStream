@@ -187,6 +187,14 @@ export function registerIpcHandlers(): void {
     setAdblock(enabled, partitions)
   )
 
+  ipcMain.handle(IPC.pickFolder, async (event: IpcMainInvokeEvent) => {
+    const window = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const { canceled, filePaths } = await dialog.showOpenDialog(window!, {
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return canceled || filePaths.length === 0 ? null : filePaths[0]
+  })
+
   // --- Codex (lazy app-server; see docs/codex-integration.md) ---
 
   ipcMain.handle(IPC.codexInstalled, () => codexInstalled())

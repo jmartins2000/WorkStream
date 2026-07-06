@@ -355,6 +355,8 @@ export interface ClaudeBridge {
   onRunEvent(listener: (event: RunEvent) => void): () => void
   /** Enable/disable ad & tracker blocking on the given webview partitions. */
   setAdblock(enabled: boolean, partitions: string[]): Promise<void>
+  /** Native folder picker; returns the chosen absolute path or null. */
+  pickFolder(): Promise<string | null>
   /** Codex: binary presence (never spawns anything). */
   codexInstalled(): Promise<{ installed: boolean; path: string | null }>
   /** Codex: account/auth state (spawns the lazy server — Codex tab only). */
@@ -411,6 +413,7 @@ export const IPC = {
   writeMemory: 'claude:writeMemory',
   runEvent: 'claude:runEvent',
   setAdblock: 'app:setAdblock',
+  pickFolder: 'app:pickFolder',
   codexInstalled: 'codex:installed',
   codexAccount: 'codex:account',
   codexLogin: 'codex:login',

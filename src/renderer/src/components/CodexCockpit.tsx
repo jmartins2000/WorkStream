@@ -6,12 +6,39 @@ import type {
   CodexThreadSummary
 } from '../../../shared/types'
 import type { UseCodexRun } from '../useCodexRun'
-import { useSessions } from '../useSessions'
 import { CodexTranscript } from './CodexTranscript'
 import { CodexComposer, ACCESS_MODES } from './CodexComposer'
 import { CodexDiffPane } from './CodexDiffPane'
 
 type Gate = 'checking' | 'not-installed' | 'login' | 'ready'
+
+/**
+ * Codex keeps its own recent-projects list (localStorage) — deliberately NOT
+ * derived from Claude's ~/.claude project store; the two agents' worlds stay
+ * separate.
+ */
+const RECENTS_KEY = 'workstream:codex-recent-projects'
+
+function loadRecents(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecents(recents: string[]): void {
+  try {
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents.slice(0, 10)))
+  } catch {
+    // non-fatal
+  }
+}
+
+function basename(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? path
+}
 
 function relativeTime(ms: number | null): string {
   if (!ms) return ''
@@ -38,8 +65,8 @@ interface CodexCockpitProps {
  * happens once the user opens the tab.
  */
 export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element {
-  const sessions = useSessions()
-  const [cwd, setCwd] = useState('')
+  const [recents, setRecents] = useState<string[]>(loadRecents)
+  const [cwd, setCwd] = useState(() => loadRecents()[0] ?? '')
   const [gate, setGate] = useState<Gate>('checking')
   const [account, setAccount] = useState<CodexAccount | null>(null)
   const [models, setModels] = useState<CodexModel[]>([])
@@ -52,9 +79,19 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
   const [gateError, setGateError] = useState<string | null>(null)
   const [diffOpen, setDiffOpen] = useState(true)
 
-  useEffect(() => {
-    if (sessions.selectedProject) setCwd(sessions.selectedProject.cwd)
-  }, [sessions.selectedProject])
+  const openProject = useCallback((path: string) => {
+    setCwd(path)
+    setRecents((prev) => {
+      const next = [path, ...prev.filter((p) => p !== path)]
+      saveRecents(next)
+      return next
+    })
+  }, [])
+
+  const chooseFolder = useCallback(async () => {
+    const picked = await window.claude.pickFolder()
+    if (picked) openProject(picked)
+  }, [openProject])
 
   const loadReady = useCallback(async () => {
     const modelList = await window.claude.codexModels()
@@ -136,7 +173,7 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
   }
 
   const handleSelectThread = async (thread: CodexThreadSummary): Promise<void> => {
-    setCwd(thread.cwd)
+    openProject(thread.cwd)
     const messages = await window.claude.codexThreadMessages(thread.threadId)
     run.setMessages(messages, thread.threadId)
   }
@@ -204,20 +241,36 @@ export function CodexCockpit({ run, onHandOff }: CodexCockpitProps): JSX.Element
   return (
     <div className="codex-root">
       <aside className="cx-sidebar">
-        <select
-          className="cx-project"
-          value={sessions.selectedProject?.dirName ?? ''}
-          onChange={(event) => {
-            const project = sessions.projects.find((p) => p.dirName === event.target.value)
-            if (project) sessions.selectProject(project)
-          }}
-        >
-          {sessions.projects.map((project) => (
-            <option key={project.dirName} value={project.dirName}>
-              {project.cwd.split('/').filter(Boolean).pop()}
-            </option>
-          ))}
-        </select>
+        <div className="cx-project-row">
+          {recents.length > 0 ? (
+            <select
+              className="cx-project"
+              value={cwd}
+              onChange={(event) => openProject(event.target.value)}
+            >
+              {recents.map((path) => (
+                <option key={path} value={path} title={path}>
+                  {basename(path)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="cx-project cx-project--empty">No project</span>
+          )}
+          <button
+            type="button"
+            className="cx-project-pick"
+            onClick={() => void chooseFolder()}
+            title="Open a project folder"
+          >
+            …
+          </button>
+        </div>
+        {cwd && (
+          <div className="cx-cwd" title={cwd}>
+            {cwd}
+          </div>
+        )}
 
         <button type="button" className="cx-newthread" onClick={() => run.setMessages([], null)}>
           + New thread
