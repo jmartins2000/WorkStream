@@ -78,7 +78,10 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       ahead_by?: number
       commits?: { commit?: { message?: string } }[]
     }
-    const behindBy = data.status === 'behind' ? (data.ahead_by ?? 0) : 0
+    // compare/<ours>...main: `status` describes main relative to our commit.
+    // "ahead" means main has commits ours doesn't → an update is available.
+    // (ahead_by counts those commits.)
+    const behindBy = data.status === 'ahead' ? (data.ahead_by ?? 0) : 0
     if (behindBy <= 0) return { available: false, currentCommit: current }
 
     // Latest commit message (last entry) for the banner.
