@@ -9,8 +9,16 @@ export default defineConfig({
       rollupOptions: {
         // Keep `electron` (a devDependency) external so the runtime built-in is
         // used, and keep the Agent SDK external so its bundled CLI binary and
-        // manifest assets remain resolvable at runtime.
-        external: ['electron', '@anthropic-ai/claude-agent-sdk'],
+        // manifest assets remain resolvable at runtime. The adblocker must be
+        // external too: bundling it breaks its runtime require.resolve of
+        // '@ghostery/adblocker-electron-preload' (a NESTED dependency only
+        // visible from the package's own node_modules) — see the packaged-app
+        // "Cannot find module" crash. Externalized, it resolves correctly.
+        external: [
+          'electron',
+          '@anthropic-ai/claude-agent-sdk',
+          '@ghostery/adblocker-electron'
+        ],
         input: { index: resolve(__dirname, 'src/main/index.ts') }
       }
     }
