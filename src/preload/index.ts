@@ -26,6 +26,7 @@ import {
   type StartRunOptions,
   type StartRunResult,
   type StremioServerStatus,
+  type UpdateStatus,
   type TranscriptMessage
 } from '../shared/types.js'
 
@@ -81,6 +82,9 @@ const api: ClaudeBridge = {
   setAdblock: (enabled: boolean, partitions: string[]) =>
     ipcRenderer.invoke(IPC.setAdblock, enabled, partitions) as Promise<void>,
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<string | null>,
+  checkForUpdate: () => ipcRenderer.invoke(IPC.checkForUpdate) as Promise<UpdateStatus>,
+  performUpdate: () =>
+    ipcRenderer.invoke(IPC.performUpdate) as Promise<{ started: boolean; error?: string }>,
   codexInstalled: () =>
     ipcRenderer.invoke(IPC.codexInstalled) as Promise<{ installed: boolean; path: string | null }>,
   codexAccount: () => ipcRenderer.invoke(IPC.codexAccount) as Promise<CodexAccount>,

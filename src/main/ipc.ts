@@ -46,6 +46,8 @@ import {
 } from './claude/runner.js'
 import * as stremioServer from './stremio/server.js'
 import { setAdblock } from './adblock.js'
+import { checkForUpdate } from './update/checker.js'
+import { performUpdate } from './update/runner.js'
 import {
   cancelCodexRun,
   codexAccount,
@@ -194,6 +196,10 @@ export function registerIpcHandlers(): void {
     })
     return canceled || filePaths.length === 0 ? null : filePaths[0]
   })
+
+  ipcMain.handle(IPC.checkForUpdate, () => checkForUpdate())
+
+  ipcMain.handle(IPC.performUpdate, () => performUpdate())
 
   // --- Codex (lazy app-server; see docs/codex-integration.md) ---
 

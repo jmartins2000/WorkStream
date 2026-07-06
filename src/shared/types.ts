@@ -247,6 +247,18 @@ export interface MemoryFile {
   content: string
 }
 
+/** Result of the self-update check (see src/main/update/checker.ts). */
+export interface UpdateStatus {
+  /** True when the GitHub remote has commits newer than this build. */
+  available: boolean
+  /** The commit this build was produced from, when known. */
+  currentCommit?: string
+  /** How many commits behind the remote this build is. */
+  behindBy?: number
+  /** First line of the latest remote commit message, for the banner. */
+  latestMessage?: string
+}
+
 /* ----------------------------------------------------------------------------
  * Codex (app-server protocol) — see docs/codex-integration.md
  * ------------------------------------------------------------------------- */
@@ -359,6 +371,10 @@ export interface ClaudeBridge {
   setAdblock(enabled: boolean, partitions: string[]): Promise<void>
   /** Native folder picker; returns the chosen absolute path or null. */
   pickFolder(): Promise<string | null>
+  /** Check GitHub for a newer build (read-only; never throws). */
+  checkForUpdate(): Promise<UpdateStatus>
+  /** Start the self-update (rebuild + relaunch); quits the app on success. */
+  performUpdate(): Promise<{ started: boolean; error?: string }>
   /** Codex: binary presence (never spawns anything). */
   codexInstalled(): Promise<{ installed: boolean; path: string | null }>
   /** Codex: account/auth state (spawns the lazy server — Codex tab only). */
@@ -416,6 +432,8 @@ export const IPC = {
   runEvent: 'claude:runEvent',
   setAdblock: 'app:setAdblock',
   pickFolder: 'app:pickFolder',
+  checkForUpdate: 'app:checkForUpdate',
+  performUpdate: 'app:performUpdate',
   codexInstalled: 'codex:installed',
   codexAccount: 'codex:account',
   codexLogin: 'codex:login',
