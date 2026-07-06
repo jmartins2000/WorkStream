@@ -35,3 +35,10 @@ console.log('rendered build/icon.icns')
 // Keep the renderer's topbar copy in sync.
 copyFileSync(PNG, 'src/renderer/src/assets/icon.png')
 console.log('synced src/renderer/src/assets/icon.png')
+
+// The bare mark (no squircle) for the dark-mode topbar.
+await sharp('build/icon-mark.svg', { density: 300 })
+  .resize(512, 512)
+  .png()
+  .toFile('src/renderer/src/assets/icon-mark.png')
+console.log('rendered src/renderer/src/assets/icon-mark.png')

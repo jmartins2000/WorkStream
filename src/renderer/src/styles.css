@@ -112,6 +112,14 @@ body {
   flex-shrink: 0;
 }
 
+/* Bare mark (dark mode): the diamond fills its canvas, so render smaller to
+   keep the same optical size as the squircle version. */
+.topbar__logo--mark {
+  width: 24px;
+  height: 24px;
+  margin: 0 5px;
+}
+
 .topbar__name {
   font-family: var(--serif);
   font-size: 19px;

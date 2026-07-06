@@ -11,6 +11,7 @@ import { useCodexRun } from './useCodexRun'
 import { useSettings } from './useSettings'
 import { useTheme } from './useTheme'
 import logoUrl from './assets/icon.png'
+import logoMarkUrl from './assets/icon-mark.png'
 
 /** 'claude' or the id of an entertainment tab (built-in or custom). */
 type View = string
@@ -179,7 +180,13 @@ export function App(): JSX.Element {
     <div className="app">
       <header className="topbar">
         <div className="topbar__brand">
-          <img className="topbar__logo" src={logoUrl} alt="" />
+          {/* Dark mode drops the black squircle (it vanishes into the bar)
+              and shows the bare white mark; light mode keeps the full icon. */}
+          <img
+            className={'topbar__logo' + (theme === 'dark' ? ' topbar__logo--mark' : '')}
+            src={theme === 'dark' ? logoMarkUrl : logoUrl}
+            alt=""
+          />
           <span className="topbar__name">WorkStream</span>
         </div>
 
