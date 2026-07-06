@@ -1,6 +1,6 @@
 {
   "name": "workstream",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A macOS desktop app that runs Claude Code sessions in the background while you watch Stremio, then surfaces Claude Code the moment a session finishes.",
   "main": "./out/main/index.js",
   "author": "jmartins2000",
